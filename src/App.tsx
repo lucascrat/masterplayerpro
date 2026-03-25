@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Hls from 'hls.js';
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 
@@ -59,6 +60,85 @@ function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
     groups[g].push(item);
   });
   return groups;
+}
+
+// ==========================================
+// HLS PLAYER COMPONENT
+// ==========================================
+
+function HlsPlayer({ url, onClose }: { url: string; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              break;
+          }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari native HLS
+      video.src = url;
+      video.addEventListener('loadedmetadata', () => {
+        video.play().catch(() => {});
+      });
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [url]);
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      background: '#000', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <video
+        ref={videoRef}
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        controls
+        autoPlay
+      />
+      <button
+        onClick={onClose}
+        style={{
+          position: 'absolute', top: 20, right: 20, background: 'rgba(0,0,0,0.7)',
+          color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
+          padding: '8px 16px', fontSize: '1rem', cursor: 'pointer', zIndex: 10000,
+        }}
+      >
+        ✕ Close
+      </button>
+    </div>
+  );
 }
 
 // ==========================================
@@ -146,12 +226,7 @@ export default function App() {
 
   // Player overlay
   if (playing) {
-    return (
-      <div className="player-overlay">
-        <button className="player-close" onClick={() => setPlaying(null)}>✕</button>
-        <video src={playing} autoPlay controls style={{ width: '100%', height: '100%' }} />
-      </div>
-    );
+    return <HlsPlayer url={playing} onClose={() => setPlaying(null)} />;
   }
 
   // Loading
