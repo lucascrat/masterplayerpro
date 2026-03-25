@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { M3UItem } from '../../types';
+import type { M3UItem } from '../../types';
 import { groupByCategory } from '../../utils';
 
 interface LiveTvPageProps {

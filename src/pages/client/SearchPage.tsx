@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PlaylistData } from '../../types';
+import type { PlaylistData } from '../../types';
 
 interface SearchPageProps {
   playlist: PlaylistData | null;

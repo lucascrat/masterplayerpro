@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { M3UItem } from '../../types';
+import type { M3UItem } from '../../types';
 import { groupByCategory } from '../../utils';
 import PosterImage from '../../components/PosterImage';
 

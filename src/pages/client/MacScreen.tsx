@@ -1,4 +1,4 @@
-import { DeviceInfo } from '../../types';
+import type { DeviceInfo } from '../../types';
 import Logo from '../../components/Logo';
 
 interface MacScreenProps {

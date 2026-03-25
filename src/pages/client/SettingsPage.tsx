@@ -1,4 +1,4 @@
-import { DeviceInfo } from '../../types';
+import type { DeviceInfo } from '../../types';
 
 interface SettingsPageProps {
   mac: string;

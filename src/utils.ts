@@ -1,4 +1,4 @@
-import { M3UItem } from './types';
+import type { M3UItem } from './types';
 
 export function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
   const groups: Record<string, M3UItem[]> = {};
