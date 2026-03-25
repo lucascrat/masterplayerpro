@@ -10,13 +10,13 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# Production
+# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm install tsx prisma @prisma/adapter-pg pg
+RUN npm ci --omit=dev && npm install tsx prisma @prisma/adapter-pg pg bcryptjs dotenv
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
