@@ -68,37 +68,17 @@ function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
 
 function PosterImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   if (failed || !src) {
-    return (
-      <span className="placeholder" title={alt}>
-        🎬
-      </span>
-    );
+    return <span className="placeholder">🎬</span>;
   }
 
   return (
-    <>
-      {!loaded && <span className="placeholder">🎬</span>}
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
-        style={{
-          position: loaded ? 'static' : 'absolute',
-          opacity: loaded ? 1 : 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center top',
-        }}
-      />
-    </>
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setFailed(true)}
+    />
   );
 }
 
