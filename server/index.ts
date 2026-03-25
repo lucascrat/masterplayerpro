@@ -6,10 +6,10 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('DATABASE_URL defined:', !!process.env.DATABASE_URL);
-console.log('DATABASE_URL host:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET');
+console.log('DATABASE_URL full:', process.env.DATABASE_URL);
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const dbUrl = process.env.DATABASE_URL!;
+const pool = new pg.Pool({ connectionString: dbUrl });
 
 // Test connection
 pool.query('SELECT 1').then(() => console.log('DB connected!')).catch((e: any) => console.error('DB connection failed:', e.message));
