@@ -451,31 +451,35 @@ h1, h2, h3, h4 {
 
 .movie-poster {
   width: 100%;
-  aspect-ratio: 2 / 3;
+  position: relative;
   background: #1e2535;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  /* padding-top trick: reliable 2:3 ratio in all flex/grid contexts */
+  padding-top: 150%;
 }
 
 .movie-poster img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center top;
   display: block;
-  transition: opacity 0.3s ease;
 }
 
 .movie-poster .placeholder {
-  font-size: 2.5rem;
-  opacity: 0.3;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  font-size: 2.2rem;
+  opacity: 0.25;
   color: #4b5563;
 }
 
