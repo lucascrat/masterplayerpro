@@ -438,8 +438,7 @@ h1, h2, h3, h4 {
   border-radius: 8px;
   overflow: hidden;
   background: #111827;
-  display: flex;
-  flex-direction: column;
+  display: block; /* block so padding-top% works on child */
 }
 
 .movie-card:hover {
@@ -450,12 +449,12 @@ h1, h2, h3, h4 {
 }
 
 .movie-poster {
+  display: block; /* must be block for padding-top % trick */
   width: 100%;
+  padding-top: 150%; /* 3/2 = 2:3 portrait ratio */
   position: relative;
   background: #1e2535;
   overflow: hidden;
-  /* padding-top trick: reliable 2:3 ratio in all flex/grid contexts */
-  padding-top: 150%;
 }
 
 .movie-poster img {
@@ -464,10 +463,9 @@ h1, h2, h3, h4 {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  object-position: center center;
+  object-fit: cover;
+  object-position: center top;
   display: block;
-  background: #111827;
 }
 
 .movie-poster .placeholder {
