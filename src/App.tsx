@@ -63,6 +63,33 @@ function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
 }
 
 // ==========================================
+// POSTER IMAGE WITH FALLBACK
+// ==========================================
+
+function PosterImage({ src, alt }: { src: string; alt: string }) {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+
+  return (
+    <>
+      {status !== 'error' && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onLoad={() => setStatus('loaded')}
+          onError={() => setStatus('error')}
+          style={{ opacity: status === 'loaded' ? 1 : 0, transition: 'opacity 0.3s' }}
+        />
+      )}
+      {status !== 'loaded' && (
+        <span className="placeholder">{status === 'loading' ? '...' : '🎬'}</span>
+      )}
+    </>
+  );
+}
+
+// ==========================================
 // HLS PLAYER COMPONENT
 // ==========================================
 
@@ -412,9 +439,8 @@ function ContentListPage({ title, items, onBack, onPlay }: {
               <div key={idx} className="channel-item" onClick={() => onPlay(item.url)}>
                 <div className="channel-logo">
                   {item.logo ? (
-                    <img src={item.logo} alt={item.name} onError={(e) => {
+                    <img src={item.logo} alt={item.name} loading="lazy" referrerPolicy="no-referrer" onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="placeholder">📺</span>';
                     }} />
                   ) : (
                     <span className="placeholder">📺</span>
@@ -500,10 +526,7 @@ function MovieGridPage({ title, items, onBack, onPlay }: {
                 <div key={idx} className="movie-card" onClick={() => onPlay(item.url)}>
                   <div className="movie-poster">
                     {item.logo ? (
-                      <img src={item.logo} alt={item.name} loading="lazy" onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="placeholder">🎬</span>';
-                      }} />
+                      <PosterImage src={item.logo} alt={item.name} />
                     ) : (
                       <span className="placeholder">🎬</span>
                     )}
@@ -575,9 +598,8 @@ function SearchPage({ playlist, onBack, onPlay }: {
               <div key={idx} className="channel-item" onClick={() => onPlay(item.url)}>
                 <div className="channel-logo">
                   {item.logo ? (
-                    <img src={item.logo} alt={item.name} onError={(e) => {
+                    <img src={item.logo} alt={item.name} loading="lazy" referrerPolicy="no-referrer" onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="placeholder">📺</span>';
                     }} />
                   ) : (
                     <span className="placeholder">{item.type === 'live' ? '📺' : '🎬'}</span>
