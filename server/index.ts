@@ -9,10 +9,11 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('DATABASE_URL defined:', !!process.env.DATABASE_URL);
 console.log('DATABASE_URL host:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET');
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const connectionString = process.env.DATABASE_URL!;
+const pool = new pg.Pool({ connectionString, ssl: false });
 const adapter = new PrismaPg(pool);
 // @ts-ignore - Prisma v7 adapter typing
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter, datasourceUrl: connectionString });
 const app = express();
 const PORT = process.env.API_PORT || 3001;
 
