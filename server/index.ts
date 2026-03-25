@@ -1,12 +1,17 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import pg from 'pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
-dotenv.config();
+// Only load .env in development (Coolify injects env vars in production)
+if (process.env.NODE_ENV !== 'production') {
+  const dotenv = await import('dotenv');
+  dotenv.config();
+}
+
+console.log('DATABASE_URL defined:', !!process.env.DATABASE_URL);
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
