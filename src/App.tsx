@@ -100,7 +100,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ macAddress: macAddr }),
         });
-        const deviceData = await regRes.json();
+        await regRes.json();
 
         // Get full device info
         const devRes = await fetch(`${API_URL}/device/${macAddr}`);
