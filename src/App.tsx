@@ -67,25 +67,21 @@ function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
 // ==========================================
 
 function PosterImage({ src, alt }: { src: string; alt: string }) {
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !src) {
+    return <span className="placeholder">🎬</span>;
+  }
 
   return (
-    <>
-      {status !== 'error' && (
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onLoad={() => setStatus('loaded')}
-          onError={() => setStatus('error')}
-          style={{ opacity: status === 'loaded' ? 1 : 0, transition: 'opacity 0.3s' }}
-        />
-      )}
-      {status !== 'loaded' && (
-        <span className="placeholder">{status === 'loading' ? '...' : '🎬'}</span>
-      )}
-    </>
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
