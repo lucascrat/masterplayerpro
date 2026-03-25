@@ -7,7 +7,10 @@
     "dev": "vite",
     "server": "tsx server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "build": "tsc -b && vite build",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "npm run build:client && npm run build:server",
+    "start": "node server/dist/index.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

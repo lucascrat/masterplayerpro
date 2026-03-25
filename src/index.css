@@ -7,6 +7,8 @@
   --accent-red: #e63946;
   --accent-red-dark: #b71c2c;
   --accent-gold: #ffd700;
+  --accent: var(--accent-red);
+  --accent-hover: var(--accent-red-dark);
   --text-primary: #ffffff;
   --text-secondary: #999;
   --text-muted: #666;
@@ -372,38 +374,44 @@ h1, h2, h3, h4 {
 .channel-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.8rem 1rem;
-  border-radius: 8px;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  margin-bottom: 0.5rem;
 }
 
 .channel-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(230, 57, 70, 0.08);
+  border-color: rgba(230, 57, 70, 0.2);
+  transform: translateX(8px);
 }
 
 .channel-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: var(--bg-card);
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: #151515;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .channel-logo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  padding: 4px;
 }
 
 .channel-logo .placeholder {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
+  color: #333;
 }
 
 .channel-info {
@@ -411,49 +419,68 @@ h1, h2, h3, h4 {
 }
 
 .channel-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin-bottom: 0.2rem;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+  margin-bottom: 0.25rem;
 }
 
 .channel-group {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* Movie grid */
 .movie-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1.5rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1.5rem;
   align-content: start;
 }
 
 .movie-card {
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border-radius: 8px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
   overflow: hidden;
-  background: #111827;
-  display: block; /* block so padding-top% works on child */
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
 }
 
 .movie-card:hover {
-  transform: scale(1.04);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
-  z-index: 2;
-  position: relative;
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  border-color: rgba(230, 57, 70, 0.4);
+  z-index: 10;
+}
+
+.movie-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--accent-red);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.movie-card:hover::after {
+  opacity: 1;
 }
 
 .movie-poster {
-  display: block; /* must be block for padding-top % trick */
   width: 100%;
-  padding-top: 150%; /* 3/2 = 2:3 portrait ratio */
+  aspect-ratio: 2/3;
   position: relative;
-  background: #1e2535;
+  background: #151515;
   overflow: hidden;
 }
 
@@ -463,37 +490,41 @@ h1, h2, h3, h4 {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   display: block;
+  transition: transform 0.6s ease;
+}
+
+.movie-card:hover .movie-poster img {
+  transform: scale(1.1);
 }
 
 .movie-poster .placeholder {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
-  opacity: 0.25;
-  color: #4b5563;
+  font-size: 3rem;
+  background: linear-gradient(135deg, #1e1e1e, #111);
+  color: #333;
 }
 
 .movie-title {
-  padding: 0.5rem 0.5rem 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.35;
-  min-height: 2.7em;
-  color: #e5e7eb;
+  padding: 0.8rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  margin-top: auto;
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
 }
 
 /* ==========================================
@@ -503,7 +534,8 @@ h1, h2, h3, h4 {
 /* Tablet */
 @media (max-width: 1200px) {
   .movie-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1.2rem;
   }
   .category-sidebar {
     width: 220px;
@@ -513,9 +545,9 @@ h1, h2, h3, h4 {
 /* Small tablet / large phone landscape */
 @media (max-width: 900px) {
   .movie-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 0.7rem;
-    padding: 0.7rem;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
   }
 }
 
@@ -600,17 +632,17 @@ h1, h2, h3, h4 {
 
   /* Movies grid */
   .movie-grid {
-    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-    gap: 0.55rem;
-    padding: 0.55rem;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.8rem;
+    padding: 0.8rem;
     height: calc(100vh - 108px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
   .movie-title {
-    font-size: 0.65rem;
-    padding: 0.3rem 0.35rem 0.35rem;
-    min-height: 2.3em;
+    font-size: 0.7rem;
+    padding: 0.5rem 0.4rem;
+    min-height: 3rem;
   }
 
   /* Channel list */
@@ -644,13 +676,13 @@ h1, h2, h3, h4 {
   }
 
   .movie-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.45rem;
-    padding: 0.45rem;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 0.6rem;
+    padding: 0.6rem;
   }
   .movie-title {
-    font-size: 0.6rem;
-    min-height: 2.1em;
+    font-size: 0.65rem;
+    min-height: 2.5rem;
   }
 
   .mac-address { font-size: 1.1rem; }

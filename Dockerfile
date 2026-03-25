@@ -1,18 +1,22 @@
-FROM node:20-alpine
-
+# Stage 1: Build
+FROM node:20-alpine AS builder
 WORKDIR /app
-
 COPY package*.json ./
-RUN npm ci
-
+RUN npm install
 COPY . .
-
 RUN npx prisma generate
 RUN npm run build
 
-ENV NODE_ENV=production
-ENV API_PORT=3000
+# Stage 2: Runtime
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
-EXPOSE 3000
+EXPOSE 3001
 
-CMD ["npx", "tsx", "server/index.ts"]
+# Entrypoint to run migrations and start
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
