@@ -79,7 +79,6 @@ function PosterImage({ src, alt }: { src: string; alt: string }) {
       alt={alt}
       loading="lazy"
       referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
       onError={() => setFailed(true)}
     />
   );
