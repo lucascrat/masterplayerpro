@@ -6,7 +6,16 @@
       "Bash(start http://localhost:5174/admin)",
       "Bash(curl -sk http://c8w8ckg40cgk40480sgwo8ss.187.77.230.251.sslip.io/api/device/register -X POST -H \"Content-Type: application/json\" -d '{\"\"macAddress\"\":\"\"TEST:00:00:00:00:01\"\"}')",
       "Bash(DATABASE_URL=\"postgres://postgres:QSfNggTqj5khs09GLZZe3ZojyMfdVIhHiqrQWStQC3iV6rp5WkWZI8YpFpQG3eob@187.77.230.251:5438/postgres\" npx prisma db push)",
-      "Bash(curl -sk \"http://gfbegin.top:8880/get.php?username=holandatc2025&password=8r4xwv1u&type=m3u_plus&output=m3u8\")"
+      "Bash(curl -sk \"http://gfbegin.top:8880/get.php?username=holandatc2025&password=8r4xwv1u&type=m3u_plus&output=m3u8\")",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:gfbegin.top)",
+      "Bash(curl -s --max-time 15 \"http://gfbegin.top:8880/get.php?username=holandatc2025&password=8r4xwv1u&type=m3u_plus&output=m3u8\")",
+      "Bash(curl -sI https://image.tmdb.org/t/p/w342/zJyTr8Fo412a2OIfJGXTRAm4IwX.jpg)",
+      "Bash(curl -s --max-time 10 \"http://gfbegin.top:8880/get.php?username=holandatc2025&password=8r4xwv1u&type=m3u_plus&output=m3u8\")",
+      "Bash(curl -sI https://googleplusimages.com/AMC.png)",
+      "Bash(curl -sI -H 'Referer: http://ewg000scw440ww88k4okws8k.187.77.230.251.sslip.io/' https://image.tmdb.org/t/p/w342/zJyTr8Fo412a2OIfJGXTRAm4IwX.jpg)",
+      "Bash(curl -s --max-time 10 http://ewg000scw440ww88k4okws8k.187.77.230.251.sslip.io/api/playlist/00:1A:79:00:00:00)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }
