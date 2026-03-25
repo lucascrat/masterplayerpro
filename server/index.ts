@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import pg from 'pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
@@ -8,9 +9,13 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('DATABASE_URL defined:', !!process.env.DATABASE_URL);
 console.log('DATABASE_URL host:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'NOT SET');
 
-const connectionString = process.env.DATABASE_URL!;
-const adapter = new PrismaPg({ connectionString });
-// @ts-ignore - Prisma v7 adapter typing
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+// Test connection
+pool.query('SELECT 1').then(() => console.log('DB connected!')).catch((e: any) => console.error('DB connection failed:', e.message));
+
+const adapter = new PrismaPg(pool);
+// @ts-ignore
 const prisma = new PrismaClient({ adapter });
 const app = express();
 const PORT = process.env.API_PORT || 3001;
