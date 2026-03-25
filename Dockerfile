@@ -24,6 +24,7 @@ COPY --from=builder /app/src/generated ./src/generated
 
 ENV NODE_ENV=production
 ENV API_PORT=3000
+# build v2
 
 EXPOSE 3000
 
