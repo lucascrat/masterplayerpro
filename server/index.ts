@@ -6,7 +6,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('DATABASE_URL full:', process.env.DATABASE_URL);
+console.log('DATABASE_URL defined:', !!process.env.DATABASE_URL);
 
 const dbUrl = process.env.DATABASE_URL!;
 const pool = new pg.Pool({ connectionString: dbUrl });
@@ -187,6 +187,33 @@ interface M3UItem {
   type: 'live' | 'movie' | 'series';
 }
 
+// Groups that are movies (prefix matching)
+const MOVIE_PATTERNS = [
+  'filmes:', 'filmes ', 'filme:', 'filme ',
+  'movie', 'vod', 'cinema', 'my cine',
+];
+
+// Groups that are series (prefix matching)
+const SERIES_PATTERNS = [
+  'séries:', 'séries ', 'series:', 'series ',
+  'série:', 'serie:', 'novelas', 'animes',
+  '24h | séries', '24h | animes',
+];
+
+function classifyGroup(group: string): 'live' | 'movie' | 'series' {
+  const g = group.toLowerCase().trim();
+
+  for (const pattern of MOVIE_PATTERNS) {
+    if (g.startsWith(pattern) || g.includes(pattern)) return 'movie';
+  }
+
+  for (const pattern of SERIES_PATTERNS) {
+    if (g.startsWith(pattern) || g.includes(pattern)) return 'series';
+  }
+
+  return 'live';
+}
+
 function parseM3U(content: string): { live: M3UItem[]; movies: M3UItem[]; series: M3UItem[] } {
   const lines = content.split('\n');
   const live: M3UItem[] = [];
@@ -208,20 +235,15 @@ function parseM3U(content: string): { live: M3UItem[]; movies: M3UItem[]; series
 
     if (!url || url.startsWith('#')) continue;
 
-    const item: M3UItem = { name, logo, group, url, type: 'live' };
+    const type = classifyGroup(group);
+    const item: M3UItem = { name, logo, group, url, type };
 
-    const groupLower = group.toLowerCase();
-    if (groupLower.includes('movie') || groupLower.includes('filme') || groupLower.includes('vod')) {
-      item.type = 'movie';
-      movies.push(item);
-    } else if (groupLower.includes('series') || groupLower.includes('série') || groupLower.includes('serie')) {
-      item.type = 'series';
-      series.push(item);
-    } else {
-      live.push(item);
-    }
+    if (type === 'movie') movies.push(item);
+    else if (type === 'series') series.push(item);
+    else live.push(item);
   }
 
+  console.log(`M3U parsed: ${live.length} live, ${movies.length} movies, ${series.length} series`);
   return { live, movies, series };
 }
 
