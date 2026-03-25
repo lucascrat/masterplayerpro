@@ -89,16 +89,52 @@ function PosterImage({ src, alt }: { src: string; alt: string }) {
 function HlsPlayer({ url, onClose }: { url: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto fullscreen when player opens
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const req =
+      el.requestFullscreen?.bind(el) ||
+      (el as any).webkitRequestFullscreen?.bind(el) ||
+      (el as any).mozRequestFullScreen?.bind(el);
+    if (req) req().catch(() => {});
+
+    // Exit fullscreen when browser exits (e.g. Android back button)
+    const onFsChange = () => {
+      const fsEl =
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement;
+      if (!fsEl) onClose();
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  }, [onClose]);
+
+  // Exit fullscreen when closing
+  const handleClose = () => {
+    const fsEl =
+      document.fullscreenElement || (document as any).webkitFullscreenElement;
+    if (fsEl) {
+      const exit =
+        document.exitFullscreen?.bind(document) ||
+        (document as any).webkitExitFullscreen?.bind(document);
+      if (exit) exit().catch(() => {});
+    }
+    onClose();
+  };
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-      });
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
@@ -108,23 +144,19 @@ function HlsPlayer({ url, onClose }: { url: string; onClose: () => void }) {
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              break;
+            case Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
+            case Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
+            default: hls.destroy(); break;
           }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari native HLS
       video.src = url;
+      // iOS Safari: use native fullscreen on video element
       video.addEventListener('loadedmetadata', () => {
         video.play().catch(() => {});
+        const enterFS = (video as any).webkitEnterFullscreen;
+        if (enterFS) enterFS.call(video);
       });
     }
 
@@ -137,25 +169,32 @@ function HlsPlayer({ url, onClose }: { url: string; onClose: () => void }) {
   }, [url]);
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-      background: '#000', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
+    <div
+      ref={containerRef}
+      style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        background: '#000', zIndex: 9999, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
       <video
         ref={videoRef}
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
         controls
         autoPlay
+        playsInline
       />
       <button
-        onClick={onClose}
+        onClick={handleClose}
         style={{
-          position: 'absolute', top: 20, right: 20, background: 'rgba(0,0,0,0.7)',
-          color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8,
-          padding: '8px 16px', fontSize: '1rem', cursor: 'pointer', zIndex: 10000,
+          position: 'absolute', top: 16, right: 16,
+          background: 'rgba(0,0,0,0.75)', color: '#fff',
+          border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8,
+          padding: '10px 18px', fontSize: '1rem', cursor: 'pointer',
+          zIndex: 10000, backdropFilter: 'blur(4px)',
         }}
       >
-        ✕ Close
+        ✕
       </button>
     </div>
   );
