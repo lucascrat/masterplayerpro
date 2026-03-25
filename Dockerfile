@@ -16,13 +16,11 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm install tsx prisma @prisma/adapter-pg pg bcryptjs dotenv
+RUN npm ci --omit=dev && npm install tsx @prisma/adapter-pg pg bcryptjs cors express
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/src/generated ./src/generated
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 ENV NODE_ENV=production
 ENV API_PORT=3000
