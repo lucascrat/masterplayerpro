@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// DISPOSITIVOS (MAC ADDRESS)
+// ==========================================
+
+model Device {
+  id          String    @id @default(uuid())
+  macAddress  String    @unique
+  name        String?
+  isActive    Boolean   @default(false)
+  playlistId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  playlist    Playlist? @relation(fields: [playlistId], references: [id])
+  favorites   Favorite[]
+  watchHistory WatchHistory[]
+
+  @@map("devices")
+}
+
+// ==========================================
+// ADMIN USERS
+// ==========================================
+
+model AdminUser {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  playlists Playlist[]
+
+  @@map("admin_users")
+}
+
+// ==========================================
+// PLAYLISTS M3U
+// ==========================================
+
+model Playlist {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  type        PlaylistType @default(M3U)
+  isActive    Boolean  @default(true)
+  adminId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  admin       AdminUser @relation(fields: [adminId], references: [id])
+  devices     Device[]
+
+  @@map("playlists")
+}
+
+enum PlaylistType {
+  M3U
+  M3U_PLUS
+  XTREAM
+}
+
+// ==========================================
+// CATEGORIAS & GÊNEROS
+// ==========================================
+
+model Category {
+  id       String @id @default(uuid())
+  name     String @unique
+  slug     String @unique
+  icon     String?
+  type     ContentType @default(LIVE)
+
+  movies   Movie[]
+  series   Series[]
+  channels LiveChannel[]
+
+  @@map("categories")
+}
+
+model Genre {
+  id     String @id @default(uuid())
+  name   String @unique
+  slug   String @unique
+
+  movies  MovieGenre[]
+  series  SeriesGenre[]
+
+  @@map("genres")
+}
+
+enum ContentType {
+  LIVE
+  MOVIE
+  SERIES
+}
+
+// ==========================================
+// FILMES
+// ==========================================
+
+model Movie {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  description  String?
+  posterUrl    String?
+  backdropUrl  String?
+  streamUrl    String?
+  trailerUrl   String?
+  duration     Int?
+  releaseYear  Int?
+  rating       Float?     @default(0)
+  quality      Quality    @default(HD)
+  isFeatured   Boolean    @default(false)
+  isTrending   Boolean    @default(false)
+  categoryId   String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  category     Category?  @relation(fields: [categoryId], references: [id])
+  genres       MovieGenre[]
+  favorites    Favorite[]
+  watchHistory WatchHistory[]
+
+  @@map("movies")
+}
+
+model MovieGenre {
+  movieId String
+  genreId String
+
+  movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([movieId, genreId])
+  @@map("movie_genres")
+}
+
+enum Quality {
+  SD
+  HD
+  FULL_HD
+  UHD_4K
+}
+
+// ==========================================
+// SÉRIES & EPISÓDIOS
+// ==========================================
+
+model Series {
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  description  String?
+  posterUrl    String?
+  backdropUrl  String?
+  releaseYear  Int?
+  rating       Float?   @default(0)
+  isFeatured   Boolean  @default(false)
+  isTrending   Boolean  @default(false)
+  categoryId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category     Category? @relation(fields: [categoryId], references: [id])
+  genres       SeriesGenre[]
+  seasons      Season[]
+  favorites    Favorite[]
+  watchHistory WatchHistory[]
+
+  @@map("series")
+}
+
+model SeriesGenre {
+  seriesId String
+  genreId  String
+
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  genre  Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([seriesId, genreId])
+  @@map("series_genres")
+}
+
+model Season {
+  id       String @id @default(uuid())
+  number   Int
+  title    String?
+  seriesId String
+
+  series   Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([seriesId, number])
+  @@map("seasons")
+}
+
+model Episode {
+  id           String  @id @default(uuid())
+  number       Int
+  title        String
+  description  String?
+  duration     Int?
+  streamUrl    String?
+  thumbnailUrl String?
+  quality      Quality @default(HD)
+  seasonId     String
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonId, number])
+  @@map("episodes")
+}
+
+// ==========================================
+// TV AO VIVO
+// ==========================================
+
+model LiveChannel {
+  id           String  @id @default(uuid())
+  name         String
+  slug         String  @unique
+  logoUrl      String?
+  streamUrl    String?
+  currentShow  String?
+  color        String?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+  categoryId   String?
+
+  category     Category? @relation(fields: [categoryId], references: [id])
+  favorites    Favorite[]
+
+  @@map("live_channels")
+}
+
+// ==========================================
+// FAVORITOS & HISTÓRICO
+// ==========================================
+
+model Favorite {
+  id        String   @id @default(uuid())
+  deviceId  String
+  movieId   String?
+  seriesId  String?
+  channelId String?
+  createdAt DateTime @default(now())
+
+  device  Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  movie   Movie?       @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  series  Series?      @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  channel LiveChannel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, movieId])
+  @@unique([deviceId, seriesId])
+  @@unique([deviceId, channelId])
+  @@map("favorites")
+}
+
+model WatchHistory {
+  id        String   @id @default(uuid())
+  deviceId  String
+  movieId   String?
+  seriesId  String?
+  episodeId String?
+  progress  Int      @default(0)
+  duration  Int      @default(0)
+  watchedAt DateTime @default(now())
+
+  device Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  movie  Movie?  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  series Series? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@map("watch_history")
+}
