@@ -32,8 +32,8 @@ app.get('/admin', (_req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
-// All other requests serve the React app
-app.get('*', (_req, res) => {
+// All other requests serve the React app (Express v5 wildcard syntax)
+app.get('/{*path}', (_req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
