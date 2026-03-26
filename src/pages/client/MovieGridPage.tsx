@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { M3UItem } from '../../types';
-import { groupByCategory } from '../../utils';
+import { groupByCategory, groupSeriesByShow } from '../../utils';
 import MovieDetail from '../../components/MovieDetail';
+import SeriesDetail from '../../components/SeriesDetail';
 
 interface MovieGridPageProps {
   title: string;
@@ -217,29 +218,88 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
 // ── Main Page ───────────────────────────────────────────────────────
 export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGridPageProps) {
   const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
+  const [selectedShow, setSelectedShow] = useState<{ name: string; episodes: M3UItem[] } | null>(null);
 
-  const groups = groupByCategory(items);
-  const categories = Object.keys(groups);
+  const isSeriesMode = title === 'Series' || items.some(i => /S\d{1,2}\s*[xXeE]\d{1,2}/i.test(i.name));
 
-  // Hero: prefer "lançamentos" category, else first category
+  // Build display groups:
+  // - Movies: group by category → M3UItem[]
+  // - Series: group by category → group by show → one virtual M3UItem per show
+  const { displayGroups, showEpisodesMap } = useMemo(() => {
+    const episodesMap: Record<string, M3UItem[]> = {};
+    const catGroups = groupByCategory(items);
+    const dGroups: Record<string, M3UItem[]> = {};
+
+    if (isSeriesMode) {
+      for (const [cat, catItems] of Object.entries(catGroups)) {
+        const byShow = groupSeriesByShow(catItems);
+        dGroups[cat] = Object.entries(byShow).map(([showName, eps]) => {
+          episodesMap[showName] = eps;
+          // Virtual item representing the show
+          return {
+            name: showName,
+            logo: eps[0]?.logo || '',
+            group: cat,
+            url: eps[0]?.url || '',
+            type: 'series' as const,
+          };
+        });
+      }
+    } else {
+      Object.assign(dGroups, catGroups);
+    }
+
+    return { displayGroups: dGroups, showEpisodesMap: episodesMap };
+  }, [items, isSeriesMode]);
+
+  const categories = Object.keys(displayGroups);
+
+  // Hero: prefer "lançamentos" / "novos" category, else first
   const heroCategory =
     categories.find(c => /lança/i.test(c)) ||
     categories.find(c => /cinema|destaque|novo/i.test(c)) ||
     categories[0] || '';
 
-  const heroItem = groups[heroCategory]?.[0] || items[0];
-
-  // Top 10: same category as hero
-  const top10Items = groups[heroCategory] || [];
-
-  // All other categories as rows
+  const heroItem = displayGroups[heroCategory]?.[0] || items[0];
+  const top10Items = displayGroups[heroCategory] || [];
   const otherCategories = categories.filter(c => c !== heroCategory);
+
+  const handleCardClick = (item: M3UItem) => {
+    if (isSeriesMode && showEpisodesMap[item.name]) {
+      setSelectedShow({ name: item.name, episodes: showEpisodesMap[item.name] });
+    } else {
+      setSelectedItem(item);
+    }
+  };
+
+  // Hero click for series shows the series detail
+  const handleHeroPlay = () => {
+    if (isSeriesMode && heroItem && showEpisodesMap[heroItem.name]) {
+      const eps = showEpisodesMap[heroItem.name];
+      onPlay(eps[0]?.url || heroItem.url);
+    } else if (heroItem) {
+      onPlay(heroItem.url);
+    }
+  };
+
+  const handleHeroInfo = () => {
+    if (heroItem) {
+      if (isSeriesMode && showEpisodesMap[heroItem.name]) {
+        setSelectedShow({ name: heroItem.name, episodes: showEpisodesMap[heroItem.name] });
+      } else {
+        setSelectedItem(heroItem);
+      }
+    }
+  };
+
+  // Count unique shows (series) or individual items (movies)
+  const totalCount = isSeriesMode ? Object.keys(showEpisodesMap).length : items.length;
 
   if (!items.length) {
     return (
       <div className="nf-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div style={{ textAlign: 'center', color: '#666' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎬</div>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>{isSeriesMode ? '📺' : '🎬'}</div>
           <div>Nenhum conteúdo disponível</div>
         </div>
       </div>
@@ -252,15 +312,18 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
       <div className="nf-topbar">
         <button className="nf-back-btn" onClick={onBack}>←</button>
         <span className="nf-page-title">{title}</span>
-        <span className="nf-topbar-count">{items.length} títulos</span>
+        <span className="nf-topbar-count">
+          {totalCount} {isSeriesMode ? 'séries' : 'títulos'}
+          {isSeriesMode && ` · ${items.length} ep`}
+        </span>
       </div>
 
       {/* Hero */}
       {heroItem && (
         <HeroSection
           item={heroItem}
-          onPlay={() => { setSelectedItem(null); onPlay(heroItem.url); }}
-          onInfo={() => setSelectedItem(heroItem)}
+          onPlay={handleHeroPlay}
+          onInfo={handleHeroInfo}
         />
       )}
 
@@ -268,28 +331,38 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
       <div className="nf-rows">
         {top10Items.length >= 3 && (
           <ContentRow
-            rowTitle="🔥 Top 10"
+            rowTitle={isSeriesMode ? '📺 Em Destaque' : '🔥 Top 10'}
             items={top10Items}
-            isTop10
-            onCardClick={setSelectedItem}
+            isTop10={!isSeriesMode}
+            onCardClick={handleCardClick}
           />
         )}
         {otherCategories.map(cat => (
           <ContentRow
             key={cat}
             rowTitle={cat}
-            items={groups[cat]}
-            onCardClick={setSelectedItem}
+            items={displayGroups[cat]}
+            onCardClick={handleCardClick}
           />
         ))}
       </div>
 
-      {/* Detail modal */}
+      {/* Movie detail modal */}
       {selectedItem && (
         <MovieDetail
           item={selectedItem}
           onPlay={(url) => { setSelectedItem(null); onPlay(url); }}
           onClose={() => setSelectedItem(null)}
+        />
+      )}
+
+      {/* Series detail modal (seasons + episodes) */}
+      {selectedShow && (
+        <SeriesDetail
+          showName={selectedShow.name}
+          episodes={selectedShow.episodes}
+          onPlay={(url) => { setSelectedShow(null); onPlay(url); }}
+          onClose={() => setSelectedShow(null)}
         />
       )}
     </div>
