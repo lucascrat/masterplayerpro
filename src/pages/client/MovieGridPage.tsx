@@ -128,8 +128,8 @@ function NfCard({ item, poster, rank, onClick }: NfCardProps) {
             style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.35s ease' }}
           />
         )}
-        {/* No poster fallback */}
-        {(poster === '' || error) && !poster && (
+        {/* No poster fallback — show when poster is empty OR image failed to load */}
+        {(poster === '' || error) && (
           <div className="nf-card-placeholder">
             {item.type === 'series' ? '📺' : '🎬'}
           </div>
@@ -167,7 +167,27 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
         fetchedRef.current = true;
         observer.disconnect();
         fetchBatchPosters(displayItems).then(data => {
-          setPosters(prev => ({ ...prev, ...data }));
+          setPosters(prev => {
+            const next = { ...prev, ...data };
+            // Mark every item as resolved — if TMDB has no result, fall back to
+            // the M3U tvg-logo, or '' so the card shows the emoji placeholder
+            // instead of staying in skeleton state forever
+            for (const item of displayItems) {
+              if (next[item.name] === undefined) {
+                next[item.name] = item.logo || '';
+              }
+            }
+            return next;
+          });
+        }).catch(() => {
+          // Network error: resolve all with M3U logo or empty
+          setPosters(prev => {
+            const next = { ...prev };
+            for (const item of displayItems) {
+              if (next[item.name] === undefined) next[item.name] = item.logo || '';
+            }
+            return next;
+          });
         });
       }
     }, { rootMargin: '300px 0px' });
