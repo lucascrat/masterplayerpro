@@ -41,6 +41,30 @@ app.get('/api/tmdb/series', async (req, res) => {
   res.json(result);
 });
 
+// Batch poster fetch — accepts { items: [{name, type}] }, returns { [name]: posterUrl }
+app.post('/api/tmdb/posters', async (req, res) => {
+  const items: { name: string; type: string }[] = req.body?.items || [];
+  if (!items.length) { res.json({}); return; }
+
+  // Process in parallel, limit to 10 concurrent
+  const results: Record<string, string> = {};
+  const chunks: typeof items[] = [];
+  for (let i = 0; i < items.length; i += 10) chunks.push(items.slice(i, i + 10));
+
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async ({ name, type }) => {
+      try {
+        const data = type === 'series'
+          ? await searchSeries(name, 'pt-BR')
+          : await searchMovie(name, 'pt-BR');
+        if (data?.poster) results[name] = data.poster;
+      } catch { /* ignore */ }
+    }));
+  }
+
+  res.json(results);
+});
+
 // Serve static files from the React app build
 const buildPath = path.join(__dirname, '../dist');
 app.use(express.static(buildPath));
