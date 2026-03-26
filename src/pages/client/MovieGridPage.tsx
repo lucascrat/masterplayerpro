@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { M3UItem } from '../../types';
 import { groupByCategory } from '../../utils';
-import PosterImage from '../../components/PosterImage';
+import LazyMoviePoster from '../../components/LazyMoviePoster';
 import MovieDetail from '../../components/MovieDetail';
 
 interface MovieGridPageProps {
@@ -74,15 +74,7 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
             <>
               {displayedItems.map((item, idx) => (
                 <div key={idx} className="movie-card" onClick={() => setSelectedItem(item)}>
-                  <div className="movie-poster">
-                    {item.logo ? (
-                      <PosterImage src={item.logo} alt={item.name} />
-                    ) : (
-                      <div className="placeholder">
-                        <span>🎬</span>
-                      </div>
-                    )}
-                  </div>
+                  <LazyMoviePoster item={item} />
                   <div className="movie-title">{item.name}</div>
                 </div>
               ))}
