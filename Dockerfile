@@ -21,4 +21,4 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 ENV NODE_ENV=production
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx server/index.ts"]
+CMD ["npx", "tsx", "server/index.ts"]
