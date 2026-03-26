@@ -155,7 +155,7 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
   const rowRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
 
-  const displayItems = isTop10 ? items.slice(0, 10) : items.slice(0, 24);
+  const displayItems = isTop10 ? items.slice(0, 10) : items.slice(0, 40);
 
   useEffect(() => {
     const el = rowRef.current;
@@ -254,11 +254,10 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
 
   const categories = Object.keys(displayGroups);
 
-  // Hero: prefer "lançamentos" / "novos" category, else first
-  const heroCategory =
-    categories.find(c => /lança/i.test(c)) ||
-    categories.find(c => /cinema|destaque|novo/i.test(c)) ||
-    categories[0] || '';
+  // Hero: for series prefer "novidades/lançamento/destaque", for movies prefer "lançamentos"
+  const heroCategory = isSeriesMode
+    ? (categories.find(c => /novidade|destaque|novo|recente|lança/i.test(c)) || categories[0] || '')
+    : (categories.find(c => /lança/i.test(c)) || categories.find(c => /cinema|destaque|novo/i.test(c)) || categories[0] || '');
 
   const heroItem = displayGroups[heroCategory]?.[0] || items[0];
   const top10Items = displayGroups[heroCategory] || [];
@@ -331,9 +330,9 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
       <div className="nf-rows">
         {top10Items.length >= 3 && (
           <ContentRow
-            rowTitle={isSeriesMode ? '📺 Em Destaque' : '🔥 Top 10'}
+            rowTitle={isSeriesMode ? '🔥 Top 10 Séries' : '🔥 Top 10'}
             items={top10Items}
-            isTop10={!isSeriesMode}
+            isTop10
             onCardClick={handleCardClick}
           />
         )}

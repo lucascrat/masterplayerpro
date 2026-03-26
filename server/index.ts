@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
+import { parseM3U } from './services/m3uService';
+import prisma from './db';
 
 dotenv.config();
 
@@ -63,6 +65,39 @@ app.post('/api/tmdb/posters', async (req, res) => {
   }
 
   res.json(results);
+});
+
+// Playlist analysis endpoint — returns stats about series/movies/live counts and categories
+app.get('/api/debug/playlist', async (_req, res) => {
+  try {
+    const playlist = await prisma.playlist.findFirst();
+    if (!playlist) { res.json({ error: 'No playlist found' }); return; }
+
+    const data = await parseM3U(playlist.url);
+
+    // Count unique show names in series (strip S01E01)
+    const showNames = new Set(
+      data.series.map(i => i.name.replace(/\s*[-–—]?\s*S\d{1,2}\s*[xXeE]\d{1,2}.*/i, '').trim())
+    );
+
+    const seriesGroups: Record<string, number> = {};
+    const movieGroups: Record<string, number> = {};
+    for (const i of data.series) seriesGroups[i.group] = (seriesGroups[i.group] || 0) + 1;
+    for (const i of data.movies) movieGroups[i.group] = (movieGroups[i.group] || 0) + 1;
+
+    res.json({
+      totals: {
+        live: data.live.length,
+        movies: data.movies.length,
+        seriesEpisodes: data.series.length,
+        uniqueShows: showNames.size,
+      },
+      seriesCategories: seriesGroups,
+      movieCategories: movieGroups,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err.message) });
+  }
 });
 
 // Serve static files from the React app build
