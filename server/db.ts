@@ -1,5 +1,6 @@
 import pg from 'pg';
-import { PrismaClient } from '../src/generated/prisma/client.js';
+// @ts-ignore - PrismaClient is generated at build time by `prisma generate`
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL! });
@@ -9,7 +10,7 @@ pool.query('SELECT 1')
   .catch((e: Error) => console.error('DB connection failed:', e.message));
 
 const adapter = new PrismaPg(pool);
-// @ts-ignore - Prisma v7 requires adapter
+// @ts-ignore
 const prisma = new PrismaClient({ adapter });
 
 export default prisma;
