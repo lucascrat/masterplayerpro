@@ -18,7 +18,7 @@ export const createDevice = async (req: Request, res: Response) => {
 };
 
 export const updateDevice = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params['id']);
   const { macAddress, isActive, playlistId } = req.body;
   const device = await prisma.device.update({
     where: { id },
@@ -28,7 +28,7 @@ export const updateDevice = async (req: Request, res: Response) => {
 };
 
 export const deleteDevice = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params['id']);
   await prisma.device.delete({ where: { id } });
   res.json({ success: true });
 };
@@ -39,13 +39,20 @@ export const getPlaylists = async (_req: Request, res: Response) => {
 };
 
 export const createPlaylist = async (req: Request, res: Response) => {
-  const { name, url } = req.body;
-  const playlist = await prisma.playlist.create({ data: { name, url } });
+  const { name, url, type } = req.body;
+  const admin = await prisma.adminUser.findFirst();
+  if (!admin) {
+    res.status(400).json({ error: 'No admin user found. Create an admin account first.' });
+    return;
+  }
+  const playlist = await prisma.playlist.create({
+    data: { name, url, type: type || 'M3U', adminId: admin.id }
+  });
   res.json(playlist);
 };
 
 export const deletePlaylist = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params['id']);
   await prisma.playlist.delete({ where: { id } });
   res.json({ success: true });
 };

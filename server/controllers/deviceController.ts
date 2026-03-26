@@ -3,20 +3,18 @@ import prisma from '../db';
 import { parseM3U } from '../services/m3uService';
 
 export const getDeviceStatus = async (req: Request, res: Response) => {
-  const { mac } = req.params;
+  const mac = String(req.params['mac']);
 
   try {
-    let device = await prisma.device.findUnique({
+    const existing = await prisma.device.findUnique({
       where: { macAddress: mac },
       include: { playlist: true }
     });
 
-    if (!device) {
-      device = await prisma.device.create({
-        data: { macAddress: mac, isActive: false },
-        include: { playlist: true }
-      });
-    }
+    const device = existing ?? await prisma.device.create({
+      data: { macAddress: mac, isActive: false },
+      include: { playlist: true }
+    });
 
     if (device.isActive && device.playlist) {
       const playlistData = await parseM3U(device.playlist.url);
