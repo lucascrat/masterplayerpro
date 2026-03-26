@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
+import { searchMovie, searchSeries } from './services/tmdbService';
 
 dotenv.config();
 
@@ -22,6 +23,23 @@ app.use(express.json());
 // API Routes
 app.use('/api', deviceRoutes);
 app.use('/api/admin', adminRoutes);
+
+// TMDB API proxy (token stays on server)
+app.get('/api/tmdb/movie', async (req, res) => {
+  const name = String(req.query['name'] || '');
+  const lang = String(req.query['lang'] || 'pt-BR');
+  if (!name) { res.status(400).json({ error: 'name required' }); return; }
+  const result = await searchMovie(name, lang);
+  res.json(result);
+});
+
+app.get('/api/tmdb/series', async (req, res) => {
+  const name = String(req.query['name'] || '');
+  const lang = String(req.query['lang'] || 'pt-BR');
+  if (!name) { res.status(400).json({ error: 'name required' }); return; }
+  const result = await searchSeries(name, lang);
+  res.json(result);
+});
 
 // Serve static files from the React app build
 const buildPath = path.join(__dirname, '../dist');

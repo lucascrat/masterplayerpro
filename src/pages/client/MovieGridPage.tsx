@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { M3UItem } from '../../types';
 import { groupByCategory } from '../../utils';
 import PosterImage from '../../components/PosterImage';
+import MovieDetail from '../../components/MovieDetail';
 
 interface MovieGridPageProps {
   title: string;
@@ -15,6 +16,7 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
   const categories = Object.keys(groups);
   const [selectedCat, setSelectedCat] = useState(categories[0] || '');
   const [visibleCount, setVisibleCount] = useState(50);
+  const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,6 +38,14 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
 
   return (
     <div className="content-page">
+      {selectedItem && (
+        <MovieDetail
+          item={selectedItem}
+          onPlay={(url) => { setSelectedItem(null); onPlay(url); }}
+          onClose={() => setSelectedItem(null)}
+        />
+      )}
+
       <div className="content-header">
         <button className="back-btn" onClick={onBack}>←</button>
         <h1>{title}</h1>
@@ -63,14 +73,13 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
           ) : (
             <>
               {displayedItems.map((item, idx) => (
-                <div key={idx} className="movie-card" onClick={() => onPlay(item.url)}>
+                <div key={idx} className="movie-card" onClick={() => setSelectedItem(item)}>
                   <div className="movie-poster">
                     {item.logo ? (
                       <PosterImage src={item.logo} alt={item.name} />
                     ) : (
                       <div className="placeholder">
                         <span>🎬</span>
-                        <span style={{ fontSize: '0.6rem', marginTop: '0.5rem', textAlign: 'center', padding: '0 5px' }}>{item.name}</span>
                       </div>
                     )}
                   </div>
