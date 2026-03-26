@@ -27,23 +27,32 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('loading');
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
 
+  const CONTENT_PAGES: Page[] = ['livetv', 'movies', 'series', 'search', 'settings'];
+
   const fetchStatus = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/device-status/${mac}`);
+      const res = await axios.get(`${API_BASE}/device-status/${mac}`, { timeout: 25000 });
       setDevice(res.data.device);
-      
+
       if (res.data.device?.isActive && res.data.playlist) {
         setPlaylist(res.data.playlist);
+        // Only navigate to home on initial load — never interrupt active browsing
         if (currentPage === 'loading' || currentPage === 'mac') {
           setCurrentPage('home');
         }
       } else {
-        setCurrentPage('mac');
+        // Device inactive: only redirect if not already on a content page
+        if (!CONTENT_PAGES.includes(currentPage as Page)) {
+          setCurrentPage('mac');
+        }
       }
     } catch (err) {
       console.error('Fetch status error:', err);
-      setError('Failed to connect to server');
-      setCurrentPage('mac');
+      // On error: only block at loading screen — never kick user from content pages
+      if (currentPage === 'loading') {
+        setError('Failed to connect to server');
+        setCurrentPage('mac');
+      }
     } finally {
       setLoading(false);
     }
@@ -51,7 +60,8 @@ export default function App() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+    // Poll every 5 minutes — M3U has 23k+ items, parsing is expensive
+    const interval = setInterval(fetchStatus, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [mac]);
 
