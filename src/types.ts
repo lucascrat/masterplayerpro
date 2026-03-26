@@ -19,4 +19,10 @@ export interface DeviceInfo {
   playlist: { name: string; url: string; } | null;
 }
 
-export type Page = 'loading' | 'mac' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings';
+export interface AuthSession {
+  username: string;
+  password: string;
+  playlistName: string;
+}
+
+export type Page = 'loading' | 'login' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings';

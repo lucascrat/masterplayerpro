@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useClock } from './hooks/useClock';
-import { generateMAC } from './utils';
-import type { DeviceInfo, PlaylistData, Page } from './types';
+import type { PlaylistData, Page, AuthSession } from './types';
 
 // Pages
-import MacScreen from './pages/client/MacScreen';
+import LoginScreen from './pages/client/LoginScreen';
 import HomePage from './pages/client/HomePage';
 import LiveTvPage from './pages/client/LiveTvPage';
 import MovieGridPage from './pages/client/MovieGridPage';
@@ -16,74 +15,98 @@ import SettingsPage from './pages/client/SettingsPage';
 import HlsPlayer from './components/HlsPlayer';
 
 const API_BASE = '/api';
+const AUTH_KEY = 'masterplayer_auth';
+const CONTENT_PAGES: Page[] = ['livetv', 'movies', 'series', 'search', 'settings'];
 
 export default function App() {
   const clock = useClock();
-  const [mac] = useState(generateMAC);
-  const [device, setDevice] = useState<DeviceInfo | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('loading');
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
 
-  const CONTENT_PAGES: Page[] = ['livetv', 'movies', 'series', 'search', 'settings'];
-
-  const fetchStatus = async () => {
+  const doLogin = async (username: string, password: string): Promise<boolean> => {
     try {
-      const res = await axios.get(`${API_BASE}/device-status/${mac}`, { timeout: 25000 });
-      setDevice(res.data.device);
-
-      if (res.data.device?.isActive && res.data.playlist) {
-        setPlaylist(res.data.playlist);
-        // Only navigate to home on initial load — never interrupt active browsing
-        if (currentPage === 'loading' || currentPage === 'mac') {
-          setCurrentPage('home');
-        }
-      } else {
-        // Device inactive: only redirect if not already on a content page
-        if (!CONTENT_PAGES.includes(currentPage as Page)) {
-          setCurrentPage('mac');
-        }
-      }
-    } catch (err) {
-      console.error('Fetch status error:', err);
-      // On error: only block at loading screen — never kick user from content pages
-      if (currentPage === 'loading') {
-        setError('Failed to connect to server');
-        setCurrentPage('mac');
-      }
-    } finally {
-      setLoading(false);
+      const res = await axios.post(`${API_BASE}/auth/login`, { username, password }, { timeout: 30000 });
+      const auth: AuthSession = { username, password, playlistName: res.data.playlistName };
+      setSession(auth);
+      setPlaylist(res.data.playlist);
+      localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+      setLoginError(null);
+      return true;
+    } catch (err: any) {
+      const msg = err.response?.data?.error || 'Erro ao conectar. Tente novamente.';
+      setLoginError(msg);
+      return false;
     }
   };
 
+  const handleLogin = async (username: string, password: string) => {
+    setLoginLoading(true);
+    setLoginError(null);
+    const ok = await doLogin(username, password);
+    setLoginLoading(false);
+    if (ok) setCurrentPage('home');
+  };
+
+  const logout = () => {
+    localStorage.removeItem(AUTH_KEY);
+    setSession(null);
+    setPlaylist(null);
+    setCurrentPage('login');
+  };
+
+  // On mount: try to restore session from localStorage
   useEffect(() => {
-    fetchStatus();
-    // Poll every 5 minutes — M3U has 23k+ items, parsing is expensive
-    const interval = setInterval(fetchStatus, 5 * 60 * 1000);
+    const saved = localStorage.getItem(AUTH_KEY);
+    if (saved) {
+      const auth: AuthSession = JSON.parse(saved);
+      doLogin(auth.username, auth.password).then(ok => {
+        setCurrentPage(ok ? 'home' : 'login');
+      });
+    } else {
+      setCurrentPage('login');
+    }
+  }, []);
+
+  // Refresh playlist every 5 minutes if logged in
+  useEffect(() => {
+    if (!session) return;
+    const interval = setInterval(async () => {
+      if (session) {
+        try {
+          const res = await axios.post(`${API_BASE}/auth/login`, { username: session.username, password: session.password }, { timeout: 25000 });
+          setPlaylist(res.data.playlist);
+        } catch {
+          // Silently ignore refresh errors — don't kick user from content pages
+        }
+      }
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [mac]);
+  }, [session]);
 
   const handleBack = () => setCurrentPage('home');
 
-  if (loading && currentPage === 'loading') {
+  // Loading screen
+  if (currentPage === 'loading') {
     return (
       <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Initializing MasterPlayerPro...</p>
+        <div className="spinner" />
+        <p>Carregando...</p>
       </div>
     );
   }
 
   return (
     <div className="app-container">
-      {currentPage === 'mac' && (
-        <MacScreen mac={mac} device={device} error={error} onRefresh={fetchStatus} />
+      {currentPage === 'login' && (
+        <LoginScreen onLogin={handleLogin} error={loginError} loading={loginLoading} />
       )}
 
       {currentPage === 'home' && (
-        <HomePage clock={clock} mac={mac} device={device} onNavigate={setCurrentPage} />
+        <HomePage clock={clock} mac={session?.username || ''} device={null} onNavigate={setCurrentPage} />
       )}
 
       {currentPage === 'livetv' && (
@@ -103,7 +126,7 @@ export default function App() {
       )}
 
       {currentPage === 'settings' && (
-        <SettingsPage mac={mac} device={device} onBack={handleBack} />
+        <SettingsPage mac={session?.username || ''} device={null} onBack={handleBack} onLogout={logout} />
       )}
 
       {playingUrl && (

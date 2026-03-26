@@ -4,9 +4,10 @@ interface SettingsPageProps {
   mac: string;
   device: DeviceInfo | null;
   onBack: () => void;
+  onLogout?: () => void;
 }
 
-export default function SettingsPage({ mac, device, onBack }: SettingsPageProps) {
+export default function SettingsPage({ mac, device, onBack, onLogout }: SettingsPageProps) {
   return (
     <div className="content-page">
       <div className="content-header">
@@ -57,6 +58,28 @@ export default function SettingsPage({ mac, device, onBack }: SettingsPageProps)
             <span className="value">HTML5 Video</span>
           </div>
         </div>
+
+        {onLogout && (
+          <div className="settings-section">
+            <button
+              onClick={onLogout}
+              style={{
+                background: 'rgba(230,57,70,0.15)',
+                border: '1px solid rgba(230,57,70,0.3)',
+                borderRadius: 8,
+                padding: '0.75rem 1.5rem',
+                color: '#e63946',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                width: '100%',
+                fontFamily: 'inherit',
+              }}
+            >
+              Sair da conta
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

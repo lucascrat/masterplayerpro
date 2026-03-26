@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { parseM3U } from './services/m3uService';
+import { getPlaylist } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -21,6 +21,14 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Startup migration: add username/password columns to playlists if missing
+prisma.$executeRawUnsafe(`
+  ALTER TABLE playlists
+  ADD COLUMN IF NOT EXISTS username TEXT,
+  ADD COLUMN IF NOT EXISTS password TEXT
+`).then(() => console.log('[DB] Playlist credentials columns ready'))
+  .catch((e: any) => console.log('[DB] Migration note:', e.message));
 
 // API Routes
 app.use('/api', deviceRoutes);
@@ -67,13 +75,35 @@ app.post('/api/tmdb/posters', async (req, res) => {
   res.json(results);
 });
 
+// Client login — matches username+password to a playlist
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
+    return;
+  }
+  try {
+    const playlist = await (prisma as any).playlist.findFirst({
+      where: { username, password }
+    });
+    if (!playlist) {
+      res.status(401).json({ error: 'Usuário ou senha incorretos' });
+      return;
+    }
+    const playlistData = await getPlaylist(playlist.url);
+    res.json({ success: true, playlistName: playlist.name, playlist: playlistData });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erro no servidor' });
+  }
+});
+
 // Playlist analysis endpoint — returns stats about series/movies/live counts and categories
 app.get('/api/debug/playlist', async (_req, res) => {
   try {
     const playlist = await prisma.playlist.findFirst();
     if (!playlist) { res.json({ error: 'No playlist found' }); return; }
 
-    const data = await parseM3U(playlist.url);
+    const data = await getPlaylist(playlist.url);
 
     // Count unique show names in series (strip S01E01)
     const showNames = new Set(

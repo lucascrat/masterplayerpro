@@ -99,3 +99,17 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
 
   return { live, movies, series };
 }
+
+const m3uCache = new Map<string, { data: PlaylistData; fetchedAt: number }>();
+const M3U_CACHE_TTL = 10 * 60 * 1000;
+
+export async function getPlaylist(url: string): Promise<PlaylistData> {
+  const cached = m3uCache.get(url);
+  if (cached && Date.now() - cached.fetchedAt < M3U_CACHE_TTL) {
+    console.log(`[Cache] Serving cached M3U (age: ${Math.round((Date.now() - cached.fetchedAt) / 1000)}s)`);
+    return cached.data;
+  }
+  const data = await parseM3U(url);
+  m3uCache.set(url, { data, fetchedAt: Date.now() });
+  return data;
+}

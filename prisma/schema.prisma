@@ -51,6 +51,8 @@ model Playlist {
   id          String   @id @default(uuid())
   name        String
   url         String
+  username    String?
+  password    String?
   type        PlaylistType @default(M3U)
   isActive    Boolean  @default(true)
   adminId     String

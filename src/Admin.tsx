@@ -112,6 +112,15 @@ export default function Admin() {
     }
   };
 
+  const updatePlaylist = async (id: string, data: { username: string; password: string }) => {
+    try {
+      await axios.patch(`${API_BASE}/admin/playlists/${id}`, data);
+      fetchAll();
+    } catch (err) {
+      alert('Error updating playlist credentials');
+    }
+  };
+
   if (!isLoggedIn) {
     return <AdminLogin onLogin={handleLogin} error={loginError} />;
   }
@@ -133,7 +142,7 @@ export default function Admin() {
       )}
 
       {activeTab === 'playlists' && (
-        <AdminPlaylists playlists={playlists} onDelete={deletePlaylist} onAdd={addPlaylist} />
+        <AdminPlaylists playlists={playlists} onDelete={deletePlaylist} onAdd={addPlaylist} onUpdate={updatePlaylist} />
       )}
 
       {activeTab === 'settings' && (

@@ -15,6 +15,7 @@ router.delete('/devices/:id', adminController.deleteDevice);
 
 router.get('/playlists', adminController.getPlaylists);
 router.post('/playlists', adminController.createPlaylist);
+router.patch('/playlists/:id', adminController.updatePlaylist);
 router.delete('/playlists/:id', adminController.deletePlaylist);
 
 export default router;
