@@ -10,6 +10,10 @@ import AdminDevices from './pages/admin/AdminDevices';
 import AdminPlaylists from './pages/admin/AdminPlaylists';
 
 const API_BASE = '/api';
+const ADMIN_SESSION_KEY = 'masterplayer_admin';
+
+// Axios instance with admin auth header
+const adminApi = axios.create({ baseURL: API_BASE });
 
 export default function Admin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -17,16 +21,25 @@ export default function Admin() {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
-  
+
   // Modal state for editing
   const [showModal, setShowModal] = useState(false);
   const [editDevice, setEditDevice] = useState<any>(null);
 
+  // Restore session on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (saved === 'master2024') {
+      adminApi.defaults.headers.common['authorization'] = 'master2024';
+      setIsLoggedIn(true);
+    }
+  }, []);
+
   const fetchAll = async () => {
     try {
       const [dRes, pRes] = await Promise.all([
-        axios.get(`${API_BASE}/admin/devices`),
-        axios.get(`${API_BASE}/admin/playlists`)
+        adminApi.get('/admin/devices'),
+        adminApi.get('/admin/playlists')
       ]);
       setDevices(dRes.data);
       setPlaylists(pRes.data);
@@ -41,6 +54,8 @@ export default function Admin() {
 
   const handleLogin = (pass: string) => {
     if (pass === 'master2024') {
+      adminApi.defaults.headers.common['authorization'] = 'master2024';
+      localStorage.setItem(ADMIN_SESSION_KEY, 'master2024');
       setIsLoggedIn(true);
       setLoginError(null);
     } else {
@@ -50,7 +65,7 @@ export default function Admin() {
 
   const toggleDeviceActive = async (id: string, current: boolean) => {
     try {
-      await axios.patch(`${API_BASE}/admin/devices/${id}`, { isActive: !current });
+      await adminApi.patch(`/admin/devices/${id}`, { isActive: !current });
       fetchAll();
     } catch (err) {
       alert('Error updating device');
@@ -60,7 +75,7 @@ export default function Admin() {
   const deleteDevice = async (id: string) => {
     if (!confirm('Are you sure you want to delete this device?')) return;
     try {
-      await axios.delete(`${API_BASE}/admin/devices/${id}`);
+      await adminApi.delete(`/admin/devices/${id}`);
       fetchAll();
     } catch (err) {
       alert('Error deleting device');
@@ -71,13 +86,13 @@ export default function Admin() {
     e.preventDefault();
     try {
       if (editDevice.id) {
-        await axios.patch(`${API_BASE}/admin/devices/${editDevice.id}`, {
+        await adminApi.patch(`/admin/devices/${editDevice.id}`, {
           macAddress: editDevice.macAddress,
           isActive: editDevice.isActive,
           playlistId: editDevice.playlistId
         });
       } else {
-        await axios.post(`${API_BASE}/admin/devices`, {
+        await adminApi.post(`/admin/devices`, {
           macAddress: editDevice.macAddress,
           isActive: editDevice.isActive,
           playlistId: editDevice.playlistId
@@ -93,7 +108,7 @@ export default function Admin() {
   const deletePlaylist = async (id: string) => {
     if (!confirm('Are you sure? This will affect all devices using this playlist.')) return;
     try {
-      await axios.delete(`${API_BASE}/admin/playlists/${id}`);
+      await adminApi.delete(`/admin/playlists/${id}`);
       fetchAll();
     } catch (err) {
       alert('Error deleting playlist');
@@ -105,16 +120,17 @@ export default function Admin() {
     const url = prompt('Playlist URL (M3U):');
     if (!name || !url) return;
     try {
-      await axios.post(`${API_BASE}/admin/playlists`, { name, url });
+      await adminApi.post(`/admin/playlists`, { name, url });
       fetchAll();
-    } catch (err) {
-      alert('Error adding playlist');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Unknown error';
+      alert(`Error adding playlist: ${msg}`);
     }
   };
 
   const updatePlaylist = async (id: string, data: { username: string; password: string }) => {
     try {
-      await axios.patch(`${API_BASE}/admin/playlists/${id}`, data);
+      await adminApi.patch(`/admin/playlists/${id}`, data);
       fetchAll();
     } catch (err) {
       alert('Error updating playlist credentials');
@@ -126,7 +142,7 @@ export default function Admin() {
   }
 
   return (
-    <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setIsLoggedIn(false)}>
+    <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { localStorage.removeItem(ADMIN_SESSION_KEY); setIsLoggedIn(false); }}>
       {activeTab === 'dashboard' && (
         <AdminDashboard devices={devices} playlists={playlists} />
       )}

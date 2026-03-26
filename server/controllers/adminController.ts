@@ -58,10 +58,16 @@ export const getPlaylists = async (_req: Request, res: Response) => {
 
 export const createPlaylist = async (req: Request, res: Response) => {
   const { name, url, type, username: manualUser, password: manualPass } = req.body;
-  const admin = await prisma.adminUser.findFirst();
-  if (!admin) {
-    res.status(400).json({ error: 'No admin user found.' });
+  if (!name || !url) {
+    res.status(400).json({ error: 'Name and URL are required.' });
     return;
+  }
+
+  let admin = await prisma.adminUser.findFirst();
+  if (!admin) {
+    admin = await prisma.adminUser.create({
+      data: { email: 'admin@masterplayer.local', password: 'master2024', name: 'Admin' }
+    });
   }
 
   // Auto-extract credentials from URL, allow manual override

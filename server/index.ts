@@ -30,6 +30,21 @@ prisma.$executeRawUnsafe(`
 `).then(() => console.log('[DB] Playlist credentials columns ready'))
   .catch((e: any) => console.log('[DB] Migration note:', e.message));
 
+// Ensure a default AdminUser exists (required for playlist FK)
+(async () => {
+  try {
+    const existing = await prisma.adminUser.findFirst();
+    if (!existing) {
+      await prisma.adminUser.create({
+        data: { email: 'admin@masterplayer.local', password: 'master2024', name: 'Admin' }
+      });
+      console.log('[DB] Default admin user created');
+    }
+  } catch (e: any) {
+    console.log('[DB] Admin seed note:', e.message);
+  }
+})();
+
 // API Routes
 app.use('/api', deviceRoutes);
 app.use('/api/admin', adminRoutes);
