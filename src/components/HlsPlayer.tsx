@@ -208,7 +208,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           <div style={{
             width: 52, height: 52,
             border: '4px solid rgba(255,255,255,0.15)',
-            borderTopColor: '#e63946', borderRadius: '50%',
+            borderTopColor: '#8B5CF6', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', marginTop: 16 }}>
@@ -234,7 +234,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
             <button
               onClick={handleClose}
               style={{
-                background: '#e63946', color: '#fff', border: 'none',
+                background: '#8B5CF6', color: '#fff', border: 'none',
                 borderRadius: 8, padding: '10px 24px',
                 fontSize: '0.9rem', cursor: 'pointer', fontWeight: 600,
               }}

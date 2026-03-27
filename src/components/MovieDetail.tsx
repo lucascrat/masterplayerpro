@@ -141,11 +141,11 @@ export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps)
             <button
               onClick={() => onPlay(item.url)}
               style={{
-                background: '#e63946', color: '#fff', border: 'none',
+                background: '#8B5CF6', color: '#fff', border: 'none',
                 borderRadius: 10, padding: '12px 28px', fontSize: '1rem',
                 fontWeight: 700, cursor: 'pointer', display: 'flex',
                 alignItems: 'center', gap: '0.5rem',
-                boxShadow: '0 4px 20px rgba(230,57,70,0.4)',
+                boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
               }}
             >
               ▶ Assistir

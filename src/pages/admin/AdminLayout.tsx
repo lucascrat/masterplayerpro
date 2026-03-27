@@ -21,7 +21,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab, onLogou
         <div className="admin-logo">
           <div className="admin-logo-icon">MP</div>
           <div>
-            <div className="admin-logo-text">MASTERPLAYER</div>
+            <div className="admin-logo-text">KRATOR+</div>
             <div className="admin-logo-sub">ADMIN PANEL</div>
           </div>
         </div>

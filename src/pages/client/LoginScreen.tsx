@@ -72,7 +72,7 @@ export default function LoginScreen({ onLogin, error, loading }: LoginScreenProp
                 fontFamily: 'inherit',
                 transition: 'border-color 0.2s',
               }}
-              onFocus={e => e.target.style.borderColor = '#e63946'}
+              onFocus={e => e.target.style.borderColor = '#8B5CF6'}
               onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
             />
           </div>
@@ -101,7 +101,7 @@ export default function LoginScreen({ onLogin, error, loading }: LoginScreenProp
                   fontFamily: 'inherit',
                   transition: 'border-color 0.2s',
                 }}
-                onFocus={e => e.target.style.borderColor = '#e63946'}
+                onFocus={e => e.target.style.borderColor = '#8B5CF6'}
                 onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
               />
               <button
@@ -120,8 +120,8 @@ export default function LoginScreen({ onLogin, error, loading }: LoginScreenProp
 
           {error && (
             <div style={{
-              background: 'rgba(230,57,70,0.15)',
-              border: '1px solid rgba(230,57,70,0.3)',
+              background: 'rgba(139,92,246,0.15)',
+              border: '1px solid rgba(139,92,246,0.3)',
               borderRadius: 8,
               padding: '0.65rem 0.9rem',
               color: '#ff6b7a',
@@ -136,7 +136,7 @@ export default function LoginScreen({ onLogin, error, loading }: LoginScreenProp
             type="submit"
             disabled={loading || !username.trim() || !password.trim()}
             style={{
-              background: loading ? 'rgba(230,57,70,0.5)' : 'linear-gradient(135deg, #e63946, #b71c2c)',
+              background: loading ? 'rgba(139,92,246,0.5)' : 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
               color: '#fff',
               border: 'none',
               borderRadius: 10,
@@ -164,7 +164,7 @@ export default function LoginScreen({ onLogin, error, loading }: LoginScreenProp
       </div>
 
       <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem', marginTop: '1.5rem', textAlign: 'center' }}>
-        MasterPlayerPro
+        Krator+
       </p>
     </div>
   );

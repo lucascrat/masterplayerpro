@@ -23,7 +23,7 @@ export default function SettingsPage({ mac, device, onBack, onLogout }: Settings
           </div>
           <div className="settings-row">
             <span className="label">Status</span>
-            <span className="value" style={{ color: device?.isActive ? '#4caf50' : '#e63946' }}>
+            <span className="value" style={{ color: device?.isActive ? '#4caf50' : '#8B5CF6' }}>
               {device?.isActive ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -51,7 +51,7 @@ export default function SettingsPage({ mac, device, onBack, onLogout }: Settings
           <h3>Application</h3>
           <div className="settings-row">
             <span className="label">App Version</span>
-            <span className="value">MasterPlayer Pro v1.0</span>
+            <span className="value">Krator+ v1.0</span>
           </div>
           <div className="settings-row">
             <span className="label">Player</span>
@@ -64,11 +64,11 @@ export default function SettingsPage({ mac, device, onBack, onLogout }: Settings
             <button
               onClick={onLogout}
               style={{
-                background: 'rgba(230,57,70,0.15)',
-                border: '1px solid rgba(230,57,70,0.3)',
+                background: 'rgba(139,92,246,0.15)',
+                border: '1px solid rgba(139,92,246,0.3)',
                 borderRadius: 8,
                 padding: '0.75rem 1.5rem',
-                color: '#e63946',
+                color: '#8B5CF6',
                 fontSize: '0.9rem',
                 fontWeight: 600,
                 cursor: 'pointer',

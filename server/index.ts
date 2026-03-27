@@ -244,5 +244,5 @@ app.get('/{*path}', (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 MasterPlayerPro Server running on port ${PORT}`);
+  console.log(`🚀 Krator+ Server running on port ${PORT}`);
 });

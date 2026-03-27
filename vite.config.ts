@@ -9,10 +9,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/**/*'],
       manifest: {
-        name: 'MasterPlayerPro',
-        short_name: 'MasterPlayer',
+        name: 'Krator+',
+        short_name: 'Krator+',
         description: 'IPTV Player - Canais ao vivo, filmes e séries',
-        theme_color: '#e63946',
+        theme_color: '#8B5CF6',
         background_color: '#0a0a0a',
         display: 'standalone',
         orientation: 'any',

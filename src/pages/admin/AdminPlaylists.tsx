@@ -74,7 +74,7 @@ export default function AdminPlaylists({ playlists, onDelete, onAdd, onUpdate }:
                   style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid #333', background: '#111', color: '#fff', fontSize: '0.85rem' }}
                 />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button onClick={saveEdit} style={{ flex: 1, padding: '0.45rem', background: '#e63946', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>
+                  <button onClick={saveEdit} style={{ flex: 1, padding: '0.45rem', background: '#8B5CF6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>
                     Salvar
                   </button>
                   <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: '0.45rem', background: '#333', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem' }}>

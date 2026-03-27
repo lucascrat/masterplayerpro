@@ -18,7 +18,7 @@ export default function AdminDashboard({ devices, playlists }: AdminDashboardPro
       </div>
       <div className="admin-stats-grid">
         <div className="admin-stat-card">
-          <div className="admin-stat-icon" style={{ background: 'rgba(230,57,70,0.1)', color: '#e63946' }}>📱</div>
+          <div className="admin-stat-icon" style={{ background: 'rgba(139,92,246,0.1)', color: '#8B5CF6' }}>📱</div>
           <div>
             <div className="admin-stat-value">{devices.length}</div>
             <div className="admin-stat-label">Total Devices</div>

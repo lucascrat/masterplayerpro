@@ -25,7 +25,7 @@ export default function MacScreen({ mac, device, error, onRefresh }: MacScreenPr
       <button
         onClick={onRefresh}
         style={{
-          background: 'linear-gradient(135deg, #e63946, #b71c2c)',
+          background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
           color: '#fff',
           border: 'none',
           padding: '0.8rem 2rem',
@@ -37,7 +37,7 @@ export default function MacScreen({ mac, device, error, onRefresh }: MacScreenPr
       >
         Refresh Status
       </button>
-      {error && <p style={{ color: '#e63946', fontSize: '0.85rem' }}>{error}</p>}
+      {error && <p style={{ color: '#8B5CF6', fontSize: '0.85rem' }}>{error}</p>}
     </div>
   );
 }

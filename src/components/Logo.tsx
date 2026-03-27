@@ -21,7 +21,7 @@ export default function Logo({ size = 'medium', showText = true }: LogoProps) {
       />
       {showText && (
         <div className="logo-text" style={{ fontSize: size === 'large' ? '1.8rem' : '1.3rem' }}>
-          MASTER<span className="highlight">PLAYER</span>
+          <span className="highlight">krator</span>+
         </div>
       )}
     </div>

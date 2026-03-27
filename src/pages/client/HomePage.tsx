@@ -46,7 +46,7 @@ export default function HomePage({ clock, mac, device, onNavigate }: HomePagePro
       </div>
 
       <div style={{ position: 'absolute', bottom: '1.5rem', color: '#444', fontSize: '0.75rem' }}>
-        MAC: {mac} | MasterPlayer Pro v1.0
+        {mac} | Krator+ v1.0
       </div>
 
       <InstallBanner />

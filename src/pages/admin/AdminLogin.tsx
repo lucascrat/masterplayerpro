@@ -18,7 +18,7 @@ export default function AdminLogin({ onLogin, error }: AdminLoginProps) {
       <div className="admin-login-card">
         <div className="admin-login-header">
           <div className="admin-logo-icon">MP</div>
-          <h1>MasterPlayer Admin</h1>
+          <h1>Krator+ Admin</h1>
           <p>Please enter your access key</p>
         </div>
         <form onSubmit={handleSubmit}>

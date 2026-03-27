@@ -186,9 +186,9 @@ export default function SeriesDetail({ showName, episodes, onPlay, onClose }: Se
                       >
                         <div style={{
                           width: 32, height: 32, borderRadius: 8,
-                          background: 'rgba(230,57,70,0.2)', border: '1px solid rgba(230,57,70,0.4)',
+                          background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#e63946', fontSize: '0.9rem', flexShrink: 0,
+                          color: '#8B5CF6', fontSize: '0.9rem', flexShrink: 0,
                         }}>▶</div>
                         <span style={{ color: '#e5e5e5', fontSize: '0.88rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {epLabel}

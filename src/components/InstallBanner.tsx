@@ -27,21 +27,21 @@ export default function InstallBanner() {
     <div style={{
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 8888,
       background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
-      borderTop: '1px solid rgba(230,57,70,0.3)',
+      borderTop: '1px solid rgba(139,92,246,0.3)',
       padding: '12px 16px', display: 'flex', alignItems: 'center',
       gap: '12px', boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
     }}>
       <div style={{
-        width: 44, height: 44, background: '#e63946', borderRadius: 10,
+        width: 44, height: 44, background: '#8B5CF6', borderRadius: 10,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1.4rem', flexShrink: 0,
       }}>▶</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>Instalar MasterPlayerPro</div>
+        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>Instalar Krator+</div>
         <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Adicionar à tela inicial</div>
       </div>
       <button onClick={install} style={{
-        background: '#e63946', color: '#fff', border: 'none',
+        background: '#8B5CF6', color: '#fff', border: 'none',
         borderRadius: 8, padding: '8px 16px', fontSize: '0.85rem',
         fontWeight: 600, cursor: 'pointer', flexShrink: 0,
       }}>Instalar</button>

@@ -1,20 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
-  <rect width="512" height="512" rx="96" fill="url(#grad)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="100%" style="stop-color:#0a0a0a"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#4C1D95"/>
     </linearGradient>
   </defs>
-  <!-- Red accent bar on top -->
-  <rect x="0" y="0" width="512" height="8" rx="0" fill="#e63946"/>
-  <!-- Play button circle background -->
-  <circle cx="256" cy="230" r="120" fill="#e63946" opacity="0.15"/>
-  <circle cx="256" cy="230" r="100" fill="#e63946" opacity="0.2"/>
-  <!-- Play triangle -->
-  <polygon points="220,175 220,285 320,230" fill="#e63946"/>
-  <!-- Text -->
-  <text x="256" y="390" font-family="Arial,sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle" letter-spacing="2">MASTER</text>
-  <text x="256" y="440" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#e63946" text-anchor="middle" letter-spacing="8">PLAYER</text>
+  <rect width="512" height="512" rx="90" fill="url(#bg)"/>
+  <!-- K letter with integrated play triangle -->
+  <g transform="translate(256,256)">
+    <!-- Left vertical bar of K -->
+    <rect x="-120" y="-130" width="55" height="260" rx="12" fill="white"/>
+    <!-- Upper diagonal of K -->
+    <polygon points="-65,-10 60,-130 120,-130 -20,-10" fill="white"/>
+    <!-- Play triangle (lower part of K, forms the arrow/play shape) -->
+    <polygon points="-65,10 -65,130 80,70" fill="white"/>
+  </g>
 </svg>

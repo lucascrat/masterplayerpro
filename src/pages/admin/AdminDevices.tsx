@@ -43,7 +43,7 @@ export default function AdminDevices({ devices, playlists, onToggleActive, onDel
                 <td>{device.playlist?.name || <span style={{ color: '#555' }}>None</span>}</td>
                 <td style={{ display: 'flex', gap: '8px' }}>
                   <button className="admin-btn-sm" onClick={() => onOpenEdit(device)}>Edit</button>
-                  <button className="admin-btn-sm" style={{ borderColor: 'rgba(230,57,70,0.3)', color: '#e63946' }} onClick={() => onDelete(device.id)}>Delete</button>
+                  <button className="admin-btn-sm" style={{ borderColor: 'rgba(139,92,246,0.3)', color: '#8B5CF6' }} onClick={() => onDelete(device.id)}>Delete</button>
                 </td>
               </tr>
             ))}
