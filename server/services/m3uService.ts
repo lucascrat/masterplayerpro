@@ -175,18 +175,39 @@ export async function validateCredentials(user: string, pass: string): Promise<b
 
   const url = buildUserM3uUrl(user, pass);
   try {
+    // Use stream mode — read only the first chunk then abort.
+    // The IPTV server ignores Range headers and sends the full 50MB+ file,
+    // so we must use a stream to avoid downloading everything.
     const res = await axios.get(url, {
       timeout: 15000,
-      responseType: 'text',
-      maxContentLength: 5000, // only need first bytes to validate
-      headers: { Range: 'bytes=0-500' },
-      // Accept any status to check
+      responseType: 'stream',
+      maxRedirects: 5,
       validateStatus: () => true,
     });
 
-    const text = typeof res.data === 'string' ? res.data : '';
-    // Valid M3U starts with #EXTM3U; invalid credentials return error/empty
-    return res.status === 200 && text.includes('#EXTM3U');
+    if (res.status !== 200) {
+      res.data.destroy();
+      return false;
+    }
+
+    // Read just the first chunk to check for #EXTM3U header
+    return new Promise<boolean>((resolve) => {
+      let resolved = false;
+      const done = (val: boolean) => {
+        if (!resolved) { resolved = true; res.data.destroy(); resolve(val); }
+      };
+
+      res.data.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf-8', 0, Math.min(chunk.length, 200));
+        done(text.includes('#EXTM3U'));
+      });
+
+      res.data.on('error', () => done(false));
+      res.data.on('end', () => done(false));
+
+      // Safety timeout
+      setTimeout(() => done(false), 10000);
+    });
   } catch {
     return false;
   }
