@@ -89,15 +89,27 @@ app.get('/api/proxy', async (req, res) => {
       let text = '';
       upstream.data.on('data', (chunk: Buffer) => { text += chunk.toString(); });
       upstream.data.on('end', () => {
-        const baseUrl = targetUrl.includes('?')
-          ? targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1)
-          : targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+        // Use the FINAL url after redirects (axios follows 302s internally).
+        // The server redirects gfbegin.top → 208.122.18.50 with a token, so
+        // segment paths like /hls/hash/seg.ts belong to the redirect target,
+        // not the original host.
+        const finalUrl: string = (upstream.request as any)?.res?.responseUrl || targetUrl;
+        const finalParsed  = new URL(finalUrl);
+        const finalOrigin  = finalParsed.origin;                                        // http://208.122.18.50:8880
+        const finalDir     = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);     // http://208.122.18.50:8880/live/.../
 
         const rewritten = text.split('\n').map(line => {
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith('#')) return line;
-          // Resolve relative or absolute segment URL
-          const fullUrl = trimmed.startsWith('http') ? trimmed : baseUrl + trimmed;
+
+          let fullUrl: string;
+          if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            fullUrl = trimmed;                  // already absolute
+          } else if (trimmed.startsWith('/')) {
+            fullUrl = finalOrigin + trimmed;    // absolute path → correct origin
+          } else {
+            fullUrl = finalDir + trimmed;       // relative path → final directory
+          }
           return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
         }).join('\n');
 
