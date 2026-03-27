@@ -26,22 +26,15 @@ function classifyItem(name: string, group: string): 'live' | 'movie' | 'series' 
   const n = normalize(name);
 
   if (
-    g.includes('serie') ||
-    g.includes('season') ||
-    g.includes('episod') ||
-    g.includes('novela') ||
-    g.includes('anime') ||
+    g.includes('serie') || g.includes('season') || g.includes('episod') ||
+    g.includes('novela') || g.includes('anime') ||
     /s\d{1,2}\s*[xe]\d{1,2}/i.test(n)
   ) return 'series';
 
   if (
-    g.includes('filme') ||
-    g.includes('movie') ||
-    g.includes('cinema') ||
-    g.includes('vod') ||
-    g.includes('lancamento') ||
-    g.includes('documentario') ||
-    g.includes('documentary')
+    g.includes('filme') || g.includes('movie') || g.includes('cinema') ||
+    g.includes('vod') || g.includes('lancamento') ||
+    g.includes('documentario') || g.includes('documentary')
   ) return 'movie';
 
   return 'live';
@@ -64,7 +57,6 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-
     if (line.startsWith('#EXTINF:')) {
       const nameMatch = line.match(/,(.*)$/);
       currentItem.name = nameMatch ? nameMatch[1].trim() : 'Unknown';
@@ -76,11 +68,9 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
       currentItem.url = line;
       const type = classifyItem(currentItem.name || '', currentItem.group || '');
       currentItem.type = type;
-
       if (type === 'series') series.push(currentItem as M3UItem);
       else if (type === 'movie') movies.push(currentItem as M3UItem);
       else live.push(currentItem as M3UItem);
-
       currentItem = {};
     }
   }
@@ -89,89 +79,181 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
   return { live, movies, series };
 }
 
-// ── In-memory cache (24h TTL) ────────────────────────────────────────────────
-const m3uCache = new Map<string, { data: PlaylistData; fetchedAt: number }>();
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+// ══════════════════════════════════════════════════════════════════════════════
+// REFERENCE-BASED CACHE
+// All users share the same IPTV server — content is identical, only the
+// username/password in stream URLs differs. We cache content from ONE
+// reference account and rewrite URLs for each user on login.
+// ══════════════════════════════════════════════════════════════════════════════
+
+interface RefConfig {
+  /** Full M3U URL of the reference account */
+  url: string;
+  /** IPTV server origin, e.g. http://gfbegin.top:8880 */
+  origin: string;
+  /** Reference account credentials (extracted from URL) */
+  username: string;
+  password: string;
+}
+
+let refConfig: RefConfig | null = null;
+let cachedData: PlaylistData | null = null;
+let cachedAt = 0;
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
 /**
- * Get playlist data — returns instantly from cache if available.
- * Only fetches from the M3U URL if cache is expired or missing.
+ * Extract IPTV server config from a playlist URL.
+ * Supports both query-string and Xtream Codes path formats.
  */
-export async function getPlaylist(url: string): Promise<PlaylistData> {
-  const cached = m3uCache.get(url);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
-    const ageMin = Math.round((Date.now() - cached.fetchedAt) / 60000);
-    console.log(`[Cache] Hit (age: ${ageMin}min)`);
-    return cached.data;
-  }
+function extractConfig(m3uUrl: string): RefConfig | null {
+  try {
+    const parsed = new URL(m3uUrl);
+    const origin = parsed.origin;
+    let username = '', password = '';
 
-  console.log('[Cache] Miss — fetching M3U...');
-  const data = await parseM3U(url);
-  m3uCache.set(url, { data, fetchedAt: Date.now() });
-  return data;
+    // Query string format: ?username=X&password=Y
+    if (parsed.searchParams.has('username')) {
+      username = parsed.searchParams.get('username') || '';
+      password = parsed.searchParams.get('password') || '';
+    } else {
+      // Xtream path format: /user/pass/...
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        username = parts[0];
+        password = parts[1];
+      }
+    }
+
+    if (!username || !password) return null;
+    return { url: m3uUrl, origin, username, password };
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Force refresh a specific URL's cache (used by scheduled refresh).
+ * Build the M3U URL for a specific user on the same IPTV server.
  */
-async function refreshUrl(url: string): Promise<void> {
-  try {
-    const data = await parseM3U(url);
-    m3uCache.set(url, { data, fetchedAt: Date.now() });
-    console.log(`[Cache] Refreshed: ${url.substring(0, 50)}...`);
-  } catch (err: any) {
-    console.error(`[Cache] Refresh failed for ${url.substring(0, 50)}: ${err.message}`);
+function buildUserM3uUrl(user: string, pass: string): string {
+  if (!refConfig) throw new Error('No reference config');
+  const parsed = new URL(refConfig.url);
+  parsed.searchParams.set('username', user);
+  parsed.searchParams.set('password', pass);
+  return parsed.toString();
+}
+
+/**
+ * Rewrite all stream URLs in cached data to use a specific user's credentials.
+ * Replaces /refUser/refPass/ → /user/pass/ in every stream URL.
+ */
+function rewriteForUser(data: PlaylistData, user: string, pass: string): PlaylistData {
+  if (!refConfig) return data;
+
+  const fromPattern = `/${refConfig.username}/${refConfig.password}/`;
+  const toPattern = `/${user}/${pass}/`;
+
+  function rewriteItems(items: M3UItem[]): M3UItem[] {
+    return items.map(item => ({
+      ...item,
+      url: item.url.replace(fromPattern, toPattern),
+    }));
   }
+
+  return {
+    live: rewriteItems(data.live),
+    movies: rewriteItems(data.movies),
+    series: rewriteItems(data.series),
+  };
+}
+
+/**
+ * Validate user credentials against the IPTV server.
+ * Makes a quick HEAD/partial request to see if the M3U URL responds with valid data.
+ */
+export async function validateCredentials(user: string, pass: string): Promise<boolean> {
+  if (!refConfig) return false;
+
+  const url = buildUserM3uUrl(user, pass);
+  try {
+    const res = await axios.get(url, {
+      timeout: 15000,
+      responseType: 'text',
+      maxContentLength: 5000, // only need first bytes to validate
+      headers: { Range: 'bytes=0-500' },
+      // Accept any status to check
+      validateStatus: () => true,
+    });
+
+    const text = typeof res.data === 'string' ? res.data : '';
+    // Valid M3U starts with #EXTM3U; invalid credentials return error/empty
+    return res.status === 200 && text.includes('#EXTM3U');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get playlist data for a specific user.
+ * Returns cached content with URLs rewritten for the user's credentials.
+ */
+export function getPlaylistForUser(user: string, pass: string): PlaylistData | null {
+  if (!cachedData) return null;
+  return rewriteForUser(cachedData, user, pass);
+}
+
+/**
+ * Legacy: get playlist by URL (used by admin/debug endpoints).
+ */
+export async function getPlaylist(url: string): Promise<PlaylistData> {
+  if (cachedData && refConfig?.url === url && Date.now() - cachedAt < CACHE_TTL) {
+    return cachedData;
+  }
+  const data = await parseM3U(url);
+  // If this is the reference URL, update cache
+  if (refConfig && refConfig.url === url) {
+    cachedData = data;
+    cachedAt = Date.now();
+  }
+  return data;
 }
 
 // ── Preload & scheduled refresh ──────────────────────────────────────────────
 
 /**
- * Called on server startup: fetch and cache ALL playlists from DB
- * so the first user login is instant.
+ * Load the reference playlist from DB and cache it.
+ * Called on startup and by the nightly scheduler.
  */
 export async function preloadAllPlaylists(): Promise<void> {
   try {
-    const playlists = await (prisma as any).playlist.findMany();
-    if (!playlists.length) {
-      console.log('[Preload] No playlists in DB — nothing to cache');
+    const playlist = await (prisma as any).playlist.findFirst();
+    if (!playlist) {
+      console.log('[Preload] No playlist in DB — nothing to cache');
       return;
     }
 
-    console.log(`[Preload] Loading ${playlists.length} playlist(s) into cache...`);
+    const config = extractConfig(playlist.url);
+    if (!config) {
+      console.log('[Preload] Could not extract config from URL:', playlist.url);
+      return;
+    }
+
+    refConfig = config;
+    console.log(`[Preload] IPTV server: ${config.origin} | ref: ${config.username}`);
+
     const start = Date.now();
-
-    // Fetch all playlists in parallel (max 3 concurrent)
-    const chunks: any[][] = [];
-    for (let i = 0; i < playlists.length; i += 3) {
-      chunks.push(playlists.slice(i, i + 3));
-    }
-
-    for (const chunk of chunks) {
-      await Promise.allSettled(
-        chunk.map((p: any) => refreshUrl(p.url))
-      );
-    }
-
+    cachedData = await parseM3U(config.url);
+    cachedAt = Date.now();
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    console.log(`[Preload] Done — ${playlists.length} playlist(s) cached in ${elapsed}s`);
+
+    const total = cachedData.live.length + cachedData.movies.length + cachedData.series.length;
+    console.log(`[Preload] Cached ${total} items in ${elapsed}s`);
   } catch (err: any) {
     console.error('[Preload] Error:', err.message);
   }
 }
 
 /**
- * Refresh all cached playlists (called by scheduler).
- */
-export async function refreshAllPlaylists(): Promise<void> {
-  console.log('[Scheduler] Starting nightly playlist refresh...');
-  await preloadAllPlaylists();
-  console.log('[Scheduler] Nightly refresh complete');
-}
-
-/**
- * Schedule automatic refresh at 3:00 AM local time every day.
- * Call this once on server startup.
+ * Schedule automatic refresh at 3:00 AM daily.
  */
 export function scheduleNightlyRefresh(): void {
   function msUntilNext3AM(): number {
@@ -187,8 +269,7 @@ export function scheduleNightlyRefresh(): void {
   console.log(`[Scheduler] Next refresh in ${hours}h (3:00 AM)`);
 
   setTimeout(() => {
-    refreshAllPlaylists();
-    // After first refresh, repeat every 24h
-    setInterval(refreshAllPlaylists, 24 * 60 * 60 * 1000);
+    preloadAllPlaylists();
+    setInterval(preloadAllPlaylists, 24 * 60 * 60 * 1000);
   }, ms);
 }
