@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import axios from 'axios';
 
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
@@ -48,6 +49,73 @@ prisma.$executeRawUnsafe(`
 // API Routes
 app.use('/api', deviceRoutes);
 app.use('/api/admin', adminRoutes);
+
+// ── Stream Proxy ─────────────────────────────────────────────────────────────
+// IPTV servers run on HTTP, app is on HTTPS — browser blocks mixed content.
+// This proxy fetches the stream server-side (no mixed content) and pipes
+// it back to the client over our HTTPS connection.
+// For HLS manifests (.m3u8) it rewrites internal URLs to also go through proxy.
+app.get('/api/proxy', async (req, res) => {
+  const targetUrl = String(req.query['url'] || '');
+
+  if (!targetUrl || !targetUrl.startsWith('http')) {
+    res.status(400).send('Missing or invalid url parameter');
+    return;
+  }
+
+  try {
+    const upstream = await axios.get(targetUrl, {
+      responseType: 'stream',
+      timeout: 20000,
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; IPTV)',
+        'Accept': '*/*',
+      },
+    });
+
+    const contentType = String(upstream.headers['content-type'] || '');
+    const isM3U8 = contentType.includes('mpegurl') ||
+                   contentType.includes('x-mpegURL') ||
+                   targetUrl.split('?')[0].endsWith('.m3u8');
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+
+    if (isM3U8) {
+      // Collect manifest text, rewrite segment/chunk URLs to go through proxy
+      let text = '';
+      upstream.data.on('data', (chunk: Buffer) => { text += chunk.toString(); });
+      upstream.data.on('end', () => {
+        const baseUrl = targetUrl.includes('?')
+          ? targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1)
+          : targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+
+        const rewritten = text.split('\n').map(line => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return line;
+          // Resolve relative or absolute segment URL
+          const fullUrl = trimmed.startsWith('http') ? trimmed : baseUrl + trimmed;
+          return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
+        }).join('\n');
+
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.send(rewritten);
+      });
+    } else {
+      // Raw stream / TS segment / MP4 — pipe directly
+      res.setHeader('Content-Type', contentType || 'video/MP2T');
+      if (upstream.headers['content-length']) {
+        res.setHeader('Content-Length', upstream.headers['content-length'] as string);
+      }
+      upstream.data.pipe(res);
+    }
+  } catch (err: any) {
+    if (!res.headersSent) {
+      res.status(502).send('Proxy upstream error: ' + err.message);
+    }
+  }
+});
 
 // TMDB API proxy (token stays on server)
 app.get('/api/tmdb/movie', async (req, res) => {

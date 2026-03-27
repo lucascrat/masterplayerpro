@@ -6,27 +6,20 @@ interface HlsPlayerProps {
   onClose: () => void;
 }
 
-// Only treat actual HLS manifests as HLS (not bare .ts segments)
-function isHlsUrl(url: string): boolean {
-  const u = url.toLowerCase().split('?')[0];
-  return u.endsWith('.m3u8') || u.includes('/hls/');
-}
-
-// Try to upgrade HTTP stream to HTTPS (many IPTV providers support both)
-function upgradeToHttps(url: string): string {
+// Route HTTP streams through our server proxy (avoids mixed-content blocking)
+// App is HTTPS, IPTV server is HTTP → browser blocks direct XHR to HTTP.
+// Proxy fetches from server-side (no mixed content) and pipes back over HTTPS.
+function proxify(url: string): string {
   if (url.startsWith('http://')) {
-    return 'https://' + url.slice(7);
+    return `/api/proxy?url=${encodeURIComponent(url)}`;
   }
   return url;
 }
 
-// Check if we have a mixed content situation
-function isMixedContent(url: string): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.location.protocol === 'https:' &&
-    url.startsWith('http://')
-  );
+// Detect HLS manifests (not bare .ts segments)
+function isHlsUrl(url: string): boolean {
+  const u = url.toLowerCase().split('?')[0];
+  return u.endsWith('.m3u8') || u.includes('/hls/');
 }
 
 export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
@@ -36,9 +29,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
 
-  // If mixed content: try HTTPS upgrade first
-  const effectiveUrl = isMixedContent(url) ? upgradeToHttps(url) : url;
-  const useHls = isHlsUrl(effectiveUrl);
+  // Route through proxy if needed
+  const effectiveUrl = proxify(url);
+  const useHls = isHlsUrl(url); // check original URL, not proxified
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +69,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     const onFsChange = () => {
       const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
-      // Only auto-close if we actually entered fullscreen and user exited it
+      // Only close when user actively exits fullscreen (not on denied request)
       if (!fsEl && fsEnteredRef.current) onClose();
     };
     document.addEventListener('fullscreenchange', onFsChange);
@@ -105,90 +98,79 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     setError(null);
     setLoading(true);
+    fsEnteredRef.current = false;
 
-    // Clear previous timeout
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Timeout: if still loading after 20s, show error
+    // Hard timeout — 25 seconds to start playing before showing error
     timeoutRef.current = setTimeout(() => {
       setLoading(false);
-      setError('Tempo limite excedido. O stream não respondeu a tempo.');
-    }, 20000);
+      setError('Tempo esgotado. O stream não respondeu.');
+    }, 25000);
 
-    const onPlaying = () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setLoading(false);
+    const clearLoadingTimeout = () => {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
+
+    const onPlaying = () => { clearLoadingTimeout(); setLoading(false); };
+    const onCanPlay = () => { clearLoadingTimeout(); setLoading(false); };
     const onWaiting = () => setLoading(true);
-    const onCanPlay = () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const onError  = () => {
+      clearLoadingTimeout();
       setLoading(false);
-    };
-    const onError = () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setLoading(false);
-      setError('Não foi possível reproduzir este conteúdo.\nVerifique sua conexão ou tente outro canal.');
+      setError('Não foi possível reproduzir este conteúdo.');
     };
 
-    video.addEventListener('playing', onPlaying);
-    video.addEventListener('waiting', onWaiting);
-    video.addEventListener('canplay', onCanPlay);
-    video.addEventListener('error', onError);
+    video.addEventListener('playing',  onPlaying);
+    video.addEventListener('canplay',  onCanPlay);
+    video.addEventListener('waiting',  onWaiting);
+    video.addEventListener('error',    onError);
+
+    const loadWithHls = (src: string) => {
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      if (!Hls.isSupported()) {
+        // Safari — native HLS
+        video.src = src;
+        video.play().catch(() => {});
+        return;
+      }
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        maxBufferLength: 30,
+        manifestLoadingMaxRetry: 1,
+        levelLoadingMaxRetry: 1,
+        fragLoadingMaxRetry: 1,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_ev, data) => {
+        if (data.fatal) {
+          clearLoadingTimeout();
+          setLoading(false);
+          setError('Erro ao carregar stream. Verifique sua conexão.');
+          hls.destroy();
+          hlsRef.current = null;
+        }
+      });
+    };
 
     if (useHls) {
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 30,
-          // Don't retry forever on network errors
-          manifestLoadingMaxRetry: 2,
-          levelLoadingMaxRetry: 2,
-          fragLoadingMaxRetry: 2,
-        });
-        hlsRef.current = hls;
-        hls.loadSource(effectiveUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            setLoading(false);
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              // One retry attempt (might be transient)
-              hls.startLoad();
-              // If still failing after 10s, show error
-              timeoutRef.current = setTimeout(() => {
-                setError('Erro de rede: não foi possível carregar o stream.');
-                hls.destroy();
-              }, 10000);
-            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              hls.recoverMediaError();
-            } else {
-              setError('Erro ao carregar stream.');
-              hls.destroy();
-            }
-          }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari native HLS
-        video.src = effectiveUrl;
-        video.addEventListener('loadedmetadata', () => {
-          video.play().catch(() => {});
-        }, { once: true });
-      }
+      loadWithHls(effectiveUrl);
     } else {
-      // MP4 / direct video / IPTV direct stream
-      // Try HLS.js first (handles many IPTV stream types)
+      // Non-manifest URL: try HLS.js first (handles many IPTV TS stream types),
+      // fall back to native <video> if HLS.js can't handle it
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
           maxBufferLength: 30,
-          manifestLoadingMaxRetry: 1,
-          levelLoadingMaxRetry: 1,
-          fragLoadingMaxRetry: 1,
+          manifestLoadingMaxRetry: 0,
+          levelLoadingMaxRetry: 0,
+          fragLoadingMaxRetry: 0,
         });
         hlsRef.current = hls;
         hls.loadSource(effectiveUrl);
@@ -196,9 +178,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play().catch(() => {});
         });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
+        hls.on(Hls.Events.ERROR, (_ev, data) => {
           if (data.fatal) {
-            // HLS failed — fall back to native player
+            // HLS.js couldn't handle it — fall back to native <video>
             hls.destroy();
             hlsRef.current = null;
             video.src = effectiveUrl;
@@ -214,15 +196,12 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     }
 
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      clearLoadingTimeout();
       video.removeEventListener('playing', onPlaying);
-      video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('canplay', onCanPlay);
-      video.removeEventListener('error', onError);
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('error',   onError);
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
       video.pause();
       video.src = '';
       video.load();
@@ -251,7 +230,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-          background: 'rgba(0,0,0,0.6)',
+          background: 'rgba(0,0,0,0.5)',
         }}>
           <div style={{
             width: 52, height: 52, border: '4px solid rgba(255,255,255,0.15)',
@@ -260,9 +239,6 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           }} />
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', marginTop: 16 }}>
             Carregando stream...
-          </div>
-          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: 6 }}>
-            Aguarde até 20 segundos
           </div>
         </div>
       )}
@@ -277,17 +253,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           <div style={{ fontSize: '3rem' }}>⚠️</div>
           <div style={{
             color: '#fff', fontSize: '1rem', textAlign: 'center',
-            maxWidth: 320, lineHeight: 1.5, whiteSpace: 'pre-line',
+            maxWidth: 320, lineHeight: 1.5,
           }}>{error}</div>
-          {/* If mixed content was the issue, explain it */}
-          {isMixedContent(url) && (
-            <div style={{
-              color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem',
-              textAlign: 'center', maxWidth: 300,
-            }}>
-              Este stream usa HTTP. O app está tentando HTTPS automaticamente.
-            </div>
-          )}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button
               onClick={handleClose}
