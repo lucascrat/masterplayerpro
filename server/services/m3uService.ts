@@ -54,7 +54,9 @@ function classifyItem(name: string, group: string): 'live' | 'movie' | 'series' 
 
 export async function parseM3U(url: string): Promise<PlaylistData> {
   console.log(`[Parser] Fetching M3U from: ${url}`);
-  const response = await axios.get(url, { timeout: 30000, responseType: 'text' });
+  const response = await axios.get(url, { timeout: 60000, responseType: 'text',
+    maxContentLength: 100 * 1024 * 1024, // 100MB max
+  });
   const content = response.data as string;
   const lines = content.split('\n');
 

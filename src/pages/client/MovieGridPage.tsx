@@ -14,11 +14,15 @@ interface MovieGridPageProps {
 // ── Batch poster fetch ──────────────────────────────────────────────
 async function fetchBatchPosters(items: M3UItem[]): Promise<Record<string, string>> {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
     const res = await fetch('/api/tmdb/posters', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: items.map(i => ({ name: i.name, type: i.type })) }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     return res.json();
   } catch {
     return {};

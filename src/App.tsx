@@ -29,7 +29,7 @@ export default function App() {
 
   const doLogin = async (username: string, password: string): Promise<boolean> => {
     try {
-      const res = await axios.post(`${API_BASE}/auth/login`, { username, password }, { timeout: 30000 });
+      const res = await axios.post(`${API_BASE}/auth/login`, { username, password }, { timeout: 45000 });
       const auth: AuthSession = { username, password, playlistName: res.data.playlistName };
       setSession(auth);
       setPlaylist(res.data.playlist);
@@ -94,7 +94,10 @@ export default function App() {
     return (
       <div className="loading-screen">
         <div className="spinner" />
-        <p>Carregando...</p>
+        <p>Carregando playlist...</p>
+        <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
+          Aguarde, isso pode levar alguns segundos
+        </p>
       </div>
     );
   }
