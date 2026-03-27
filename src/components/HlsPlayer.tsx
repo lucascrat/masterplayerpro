@@ -6,19 +6,18 @@ interface HlsPlayerProps {
   onClose: () => void;
 }
 
-// Only real HLS manifests need HLS.js (and proxy for http:// on https page)
-// Bare .ts segments and extension-less IPTV URLs play fine via native <video>
+// Chrome 86+ blocks ALL HTTP media (video, audio) from HTTPS pages —
+// even native <video> elements. The only fix is to route every HTTP
+// stream through our own HTTPS proxy endpoint.
 function isHlsManifest(url: string): boolean {
   const u = url.toLowerCase().split('?')[0];
   return u.endsWith('.m3u8') || u.includes('/hls/');
 }
 
-// For HLS manifests served over HTTP: proxy through our HTTPS server
-// so HLS.js XHR requests are not blocked by mixed-content policy.
-// For everything else (channels, VOD without .m3u8): use native <video>
-// directly — browsers allow native media loading from HTTP even on HTTPS pages.
+// ALL http:// URLs must go through /api/proxy so the browser only
+// sees HTTPS and mixed-content blocking never triggers.
 function getEffectiveUrl(url: string): string {
-  if (isHlsManifest(url) && url.startsWith('http://')) {
+  if (url.startsWith('http://')) {
     return `/api/proxy?url=${encodeURIComponent(url)}`;
   }
   return url;
@@ -160,10 +159,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       }
     } else {
       // ── Direct stream (live channels, MP4, TS without manifest) ──
-      // Use native <video> with the ORIGINAL url.
-      // Browsers allow HTTP media src even on HTTPS pages (passive content).
-      // Do NOT use HLS.js here — its XHR would be blocked by mixed-content policy.
-      video.src = url;
+      // Use effectiveUrl (already proxied if http://) so Chrome's
+      // mixed-content blocker never sees an HTTP src on HTTPS page.
+      video.src = effectiveUrl;
       video.load();
       video.play().catch(() => {});
     }

@@ -66,8 +66,10 @@ app.get('/api/proxy', async (req, res) => {
   try {
     const upstream = await axios.get(targetUrl, {
       responseType: 'stream',
-      timeout: 20000,
+      timeout: 0,           // no timeout — live streams run indefinitely
       maxRedirects: 5,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; IPTV)',
         'Accept': '*/*',
@@ -108,6 +110,8 @@ app.get('/api/proxy', async (req, res) => {
       if (upstream.headers['content-length']) {
         res.setHeader('Content-Length', upstream.headers['content-length'] as string);
       }
+      // When client disconnects (closes player), destroy upstream to free resources
+      req.on('close', () => upstream.data.destroy());
       upstream.data.pipe(res);
     }
   } catch (err: any) {
