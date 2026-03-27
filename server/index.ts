@@ -9,7 +9,7 @@ import axios from 'axios';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -245,4 +245,10 @@ app.get('/{*path}', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Krator+ Server running on port ${PORT}`);
+
+  // Preload all playlists into memory so first login is instant
+  preloadAllPlaylists();
+
+  // Schedule automatic M3U refresh at 3:00 AM daily
+  scheduleNightlyRefresh();
 });
