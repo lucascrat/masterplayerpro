@@ -6,40 +6,41 @@ interface HlsPlayerProps {
   onClose: () => void;
 }
 
-// Route HTTP streams through our server proxy (avoids mixed-content blocking)
-// App is HTTPS, IPTV server is HTTP → browser blocks direct XHR to HTTP.
-// Proxy fetches from server-side (no mixed content) and pipes back over HTTPS.
-function proxify(url: string): string {
-  if (url.startsWith('http://')) {
+// Only real HLS manifests need HLS.js (and proxy for http:// on https page)
+// Bare .ts segments and extension-less IPTV URLs play fine via native <video>
+function isHlsManifest(url: string): boolean {
+  const u = url.toLowerCase().split('?')[0];
+  return u.endsWith('.m3u8') || u.includes('/hls/');
+}
+
+// For HLS manifests served over HTTP: proxy through our HTTPS server
+// so HLS.js XHR requests are not blocked by mixed-content policy.
+// For everything else (channels, VOD without .m3u8): use native <video>
+// directly — browsers allow native media loading from HTTP even on HTTPS pages.
+function getEffectiveUrl(url: string): string {
+  if (isHlsManifest(url) && url.startsWith('http://')) {
     return `/api/proxy?url=${encodeURIComponent(url)}`;
   }
   return url;
 }
 
-// Detect HLS manifests (not bare .ts segments)
-function isHlsUrl(url: string): boolean {
-  const u = url.toLowerCase().split('?')[0];
-  return u.endsWith('.m3u8') || u.includes('/hls/');
-}
-
 export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
+  const videoRef     = useRef<HTMLVideoElement>(null);
+  const hlsRef       = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
 
-  // Route through proxy if needed
-  const effectiveUrl = proxify(url);
-  const useHls = isHlsUrl(url); // check original URL, not proxified
+  const useHls      = isHlsManifest(url);
+  const effectiveUrl = getEffectiveUrl(url);
 
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Request fullscreen on open
+  // ── Fullscreen ──────────────────────────────────────────────────────
   useEffect(() => {
     const video = videoRef.current;
-    const el = containerRef.current;
+    const el    = containerRef.current;
     if (!el || !video) return;
 
     const tryFullscreen = () => {
@@ -50,26 +51,19 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       if (req) req().then(() => { fsEnteredRef.current = true; }).catch(() => {});
     };
 
-    const tryVideoFullscreen = () => {
+    const tryVideoFs = () => {
       const enterFS = (video as any).webkitEnterFullscreen;
-      if (enterFS) {
-        fsEnteredRef.current = true;
-        enterFS.call(video);
-      }
+      if (enterFS) { fsEnteredRef.current = true; enterFS.call(video); }
     };
 
     const timer = setTimeout(() => {
       if (document.fullscreenElement || (document as any).webkitFullscreenElement) return;
-      if ((video as any).webkitEnterFullscreen) {
-        tryVideoFullscreen();
-      } else {
-        tryFullscreen();
-      }
+      (video as any).webkitEnterFullscreen ? tryVideoFs() : tryFullscreen();
     }, 300);
 
+    // Only auto-close when user deliberately exits fullscreen
     const onFsChange = () => {
       const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
-      // Only close when user actively exits fullscreen (not on denied request)
       if (!fsEl && fsEnteredRef.current) onClose();
     };
     document.addEventListener('fullscreenchange', onFsChange);
@@ -85,13 +79,14 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   const handleClose = () => {
     const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
     if (fsEl) {
-      const exit = document.exitFullscreen?.bind(document) || (document as any).webkitExitFullscreen?.bind(document);
+      const exit = document.exitFullscreen?.bind(document) ||
+                   (document as any).webkitExitFullscreen?.bind(document);
       if (exit) exit().catch(() => {});
     }
     onClose();
   };
 
-  // Setup video source
+  // ── Video source setup ──────────────────────────────────────────────
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -102,101 +97,79 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Hard timeout — 25 seconds to start playing before showing error
+    // Hard timeout — show error after 25 s instead of loading forever
     timeoutRef.current = setTimeout(() => {
       setLoading(false);
       setError('Tempo esgotado. O stream não respondeu.');
     }, 25000);
 
-    const clearLoadingTimeout = () => {
+    const clearTO = () => {
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
 
-    const onPlaying = () => { clearLoadingTimeout(); setLoading(false); };
-    const onCanPlay = () => { clearLoadingTimeout(); setLoading(false); };
+    const onPlaying = () => { clearTO(); setLoading(false); };
+    const onCanPlay = () => { clearTO(); setLoading(false); };
     const onWaiting = () => setLoading(true);
-    const onError  = () => {
-      clearLoadingTimeout();
+    const onError   = () => {
+      clearTO();
       setLoading(false);
       setError('Não foi possível reproduzir este conteúdo.');
     };
 
-    video.addEventListener('playing',  onPlaying);
-    video.addEventListener('canplay',  onCanPlay);
-    video.addEventListener('waiting',  onWaiting);
-    video.addEventListener('error',    onError);
-
-    const loadWithHls = (src: string) => {
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-      if (!Hls.isSupported()) {
-        // Safari — native HLS
-        video.src = src;
-        video.play().catch(() => {});
-        return;
-      }
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        maxBufferLength: 30,
-        manifestLoadingMaxRetry: 1,
-        levelLoadingMaxRetry: 1,
-        fragLoadingMaxRetry: 1,
-      });
-      hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
-      });
-      hls.on(Hls.Events.ERROR, (_ev, data) => {
-        if (data.fatal) {
-          clearLoadingTimeout();
-          setLoading(false);
-          setError('Erro ao carregar stream. Verifique sua conexão.');
-          hls.destroy();
-          hlsRef.current = null;
-        }
-      });
-    };
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('error',   onError);
 
     if (useHls) {
-      loadWithHls(effectiveUrl);
-    } else {
-      // Non-manifest URL: try HLS.js first (handles many IPTV TS stream types),
-      // fall back to native <video> if HLS.js can't handle it
+      // ── HLS manifest (.m3u8) ─────────────────────────────────────
+      // effectiveUrl is already proxied if needed (avoids XHR mixed-content block)
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
+          lowLatencyMode: true,
           maxBufferLength: 30,
-          manifestLoadingMaxRetry: 0,
-          levelLoadingMaxRetry: 0,
-          fragLoadingMaxRetry: 0,
+          manifestLoadingMaxRetry: 2,
+          levelLoadingMaxRetry: 2,
+          fragLoadingMaxRetry: 2,
         });
         hlsRef.current = hls;
         hls.loadSource(effectiveUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
-        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
         hls.on(Hls.Events.ERROR, (_ev, data) => {
           if (data.fatal) {
-            // HLS.js couldn't handle it — fall back to native <video>
-            hls.destroy();
-            hlsRef.current = null;
-            video.src = effectiveUrl;
-            video.load();
-            video.play().catch(() => {});
+            clearTO();
+            setLoading(false);
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hls.recoverMediaError();
+            } else {
+              setError('Erro ao carregar stream HLS.');
+              hls.destroy();
+              hlsRef.current = null;
+            }
           }
         });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari — native HLS support, use original URL
+        video.src = url;
+        video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
       } else {
-        video.src = effectiveUrl;
-        video.load();
-        video.play().catch(() => {});
+        clearTO();
+        setError('Seu browser não suporta HLS.');
       }
+    } else {
+      // ── Direct stream (live channels, MP4, TS without manifest) ──
+      // Use native <video> with the ORIGINAL url.
+      // Browsers allow HTTP media src even on HTTPS pages (passive content).
+      // Do NOT use HLS.js here — its XHR would be blocked by mixed-content policy.
+      video.src = url;
+      video.load();
+      video.play().catch(() => {});
     }
 
     return () => {
-      clearLoadingTimeout();
+      clearTO();
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('waiting', onWaiting);
@@ -206,15 +179,16 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       video.src = '';
       video.load();
     };
-  }, [effectiveUrl, useHls]);
+  }, [url, effectiveUrl, useHls]);
 
+  // ── Render ──────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
       style={{
-        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-        background: '#000', zIndex: 9999, display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
+        position: 'fixed', inset: 0,
+        background: '#000', zIndex: 9999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
       <video
@@ -228,40 +202,43 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       {/* Loading spinner */}
       {loading && !error && (
         <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-          background: 'rgba(0,0,0,0.5)',
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none', background: 'rgba(0,0,0,0.5)',
         }}>
           <div style={{
-            width: 52, height: 52, border: '4px solid rgba(255,255,255,0.15)',
+            width: 52, height: 52,
+            border: '4px solid rgba(255,255,255,0.15)',
             borderTopColor: '#e63946', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', marginTop: 16 }}>
-            Carregando stream...
+            Carregando...
           </div>
         </div>
       )}
 
-      {/* Error message */}
+      {/* Error */}
       {error && (
         <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 16,
-          background: 'rgba(0,0,0,0.85)',
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 16, background: 'rgba(0,0,0,0.85)',
         }}>
           <div style={{ fontSize: '3rem' }}>⚠️</div>
           <div style={{
-            color: '#fff', fontSize: '1rem', textAlign: 'center',
-            maxWidth: 320, lineHeight: 1.5,
+            color: '#fff', fontSize: '1rem',
+            textAlign: 'center', maxWidth: 320, lineHeight: 1.5,
           }}>{error}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button
               onClick={handleClose}
               style={{
                 background: '#e63946', color: '#fff', border: 'none',
-                borderRadius: 8, padding: '10px 24px', fontSize: '0.9rem',
-                cursor: 'pointer', fontWeight: 600,
+                borderRadius: 8, padding: '10px 24px',
+                fontSize: '0.9rem', cursor: 'pointer', fontWeight: 600,
               }}
             >
               ← Voltar
@@ -271,8 +248,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
               style={{
                 background: 'rgba(255,255,255,0.1)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 8, padding: '10px 24px', fontSize: '0.9rem',
-                cursor: 'pointer', fontWeight: 600, textDecoration: 'none',
+                borderRadius: 8, padding: '10px 24px',
+                fontSize: '0.9rem', cursor: 'pointer',
+                fontWeight: 600, textDecoration: 'none',
               }}
             >
               Abrir no VLC
@@ -288,8 +266,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           style={{
             position: 'absolute', top: 16, right: 16,
             background: 'rgba(0,0,0,0.75)', color: '#fff',
-            border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8,
-            padding: '10px 18px', fontSize: '1rem', cursor: 'pointer',
+            border: '1px solid rgba(255,255,255,0.25)',
+            borderRadius: 8, padding: '10px 18px',
+            fontSize: '1rem', cursor: 'pointer',
             zIndex: 10000, backdropFilter: 'blur(4px)',
           }}
         >
