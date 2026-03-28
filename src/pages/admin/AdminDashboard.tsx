@@ -12,8 +12,8 @@ export default function AdminDashboard({ devices, playlists }: AdminDashboardPro
     <>
       <div className="admin-page-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Overview of your streaming platform</p>
+          <h1>Painel</h1>
+          <p>Visão geral da sua plataforma de streaming</p>
         </div>
       </div>
       <div className="admin-stats-grid">
@@ -21,14 +21,14 @@ export default function AdminDashboard({ devices, playlists }: AdminDashboardPro
           <div className="admin-stat-icon" style={{ background: 'rgba(139,92,246,0.1)', color: '#8B5CF6' }}>📱</div>
           <div>
             <div className="admin-stat-value">{devices.length}</div>
-            <div className="admin-stat-label">Total Devices</div>
+            <div className="admin-stat-label">Total de Dispositivos</div>
           </div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon" style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>✅</div>
           <div>
             <div className="admin-stat-value">{activeCount}</div>
-            <div className="admin-stat-label">Active Devices</div>
+            <div className="admin-stat-label">Dispositivos Ativos</div>
           </div>
         </div>
         <div className="admin-stat-card">
@@ -42,7 +42,7 @@ export default function AdminDashboard({ devices, playlists }: AdminDashboardPro
           <div className="admin-stat-icon" style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>📈</div>
           <div>
             <div className="admin-stat-value">100%</div>
-            <div className="admin-stat-label">System Health</div>
+            <div className="admin-stat-label">Saúde do Sistema</div>
           </div>
         </div>
       </div>

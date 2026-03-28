@@ -11,12 +11,12 @@ interface HomePageProps {
 
 export default function HomePage({ clock, mac, device, onNavigate }: HomePageProps) {
   const menuItems = [
-    { label: 'Live TV', icon: '📺', page: 'livetv' as Page },
-    { label: 'Movies', icon: '🎬', page: 'movies' as Page },
-    { label: 'Series', icon: '🎭', page: 'series' as Page },
+    { label: 'TV ao Vivo', icon: '📺', page: 'livetv' as Page },
+    { label: 'Filmes', icon: '🎬', page: 'movies' as Page },
+    { label: 'Séries', icon: '🎭', page: 'series' as Page },
     { label: 'Replay', icon: '⏪', page: 'home' as Page },
-    { label: 'Search', icon: '🔍', page: 'search' as Page },
-    { label: 'Settings', icon: '⚙️', page: 'settings' as Page },
+    { label: 'Buscar', icon: '🔍', page: 'search' as Page },
+    { label: 'Configurações', icon: '⚙️', page: 'settings' as Page },
   ];
 
   return (
@@ -27,7 +27,7 @@ export default function HomePage({ clock, mac, device, onNavigate }: HomePagePro
           {device?.playlist ? (
             <>Playlist: <span>{device.playlist.name}</span></>
           ) : (
-            <span style={{ color: '#999' }}>No playlist</span>
+            <span style={{ color: '#999' }}>Sem playlist</span>
           )}
         </div>
       </div>

@@ -59,7 +59,7 @@ export default function Admin() {
       setIsLoggedIn(true);
       setLoginError(null);
     } else {
-      setLoginError('Invalid Administrator Key');
+      setLoginError('Chave de administrador inválida');
     }
   };
 
@@ -68,17 +68,17 @@ export default function Admin() {
       await adminApi.patch(`/admin/devices/${id}`, { isActive: !current });
       fetchAll();
     } catch (err) {
-      alert('Error updating device');
+      alert('Erro ao atualizar dispositivo');
     }
   };
 
   const deleteDevice = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this device?')) return;
+    if (!confirm('Tem certeza que deseja excluir este dispositivo?')) return;
     try {
       await adminApi.delete(`/admin/devices/${id}`);
       fetchAll();
     } catch (err) {
-      alert('Error deleting device');
+      alert('Erro ao excluir dispositivo');
     }
   };
 
@@ -101,30 +101,30 @@ export default function Admin() {
       setShowModal(false);
       fetchAll();
     } catch (err) {
-      alert('Error saving device');
+      alert('Erro ao salvar dispositivo');
     }
   };
 
   const deletePlaylist = async (id: string) => {
-    if (!confirm('Are you sure? This will affect all devices using this playlist.')) return;
+    if (!confirm('Tem certeza? Isso afetará todos os dispositivos que usam esta playlist.')) return;
     try {
       await adminApi.delete(`/admin/playlists/${id}`);
       fetchAll();
     } catch (err) {
-      alert('Error deleting playlist');
+      alert('Erro ao excluir playlist');
     }
   };
 
   const addPlaylist = async () => {
-    const name = prompt('Playlist Name:');
-    const url = prompt('Playlist URL (M3U):');
+    const name = prompt('Nome da Playlist:');
+    const url = prompt('URL da Playlist (M3U):');
     if (!name || !url) return;
     try {
       await adminApi.post(`/admin/playlists`, { name, url });
       fetchAll();
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Unknown error';
-      alert(`Error adding playlist: ${msg}`);
+      const msg = err?.response?.data?.error || err?.message || 'Erro desconhecido';
+      alert(`Erro ao adicionar playlist: ${msg}`);
     }
   };
 
@@ -133,7 +133,7 @@ export default function Admin() {
       await adminApi.patch(`/admin/playlists/${id}`, data);
       fetchAll();
     } catch (err) {
-      alert('Error updating playlist credentials');
+      alert('Erro ao atualizar credenciais da playlist');
     }
   };
 
@@ -163,8 +163,8 @@ export default function Admin() {
 
       {activeTab === 'settings' && (
         <div className="admin-card">
-          <div className="admin-card-title">System Settings</div>
-          <p style={{ color: '#666', fontSize: '0.9rem' }}>General platform configuration coming soon.</p>
+          <div className="admin-card-title">Configurações do Sistema</div>
+          <p style={{ color: '#666', fontSize: '0.9rem' }}>Configurações gerais da plataforma em breve.</p>
         </div>
       )}
 
@@ -172,13 +172,13 @@ export default function Admin() {
         <div className="admin-modal-overlay">
           <div className="admin-modal">
             <div className="admin-modal-header">
-              <h2>{editDevice.id ? 'Edit Device' : 'Add New Device'}</h2>
+              <h2>{editDevice.id ? 'Editar Dispositivo' : 'Adicionar Dispositivo'}</h2>
               <button className="admin-modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <form onSubmit={saveDevice}>
               <div className="admin-modal-body">
                 <div className="admin-field">
-                  <label>MAC ADDRESS</label>
+                  <label>ENDEREÇO MAC</label>
                   <input
                     type="text"
                     className="admin-input"
@@ -195,7 +195,7 @@ export default function Admin() {
                     value={editDevice.playlistId || ''}
                     onChange={e => setEditDevice({ ...editDevice, playlistId: e.target.value })}
                   >
-                    <option value="">No Playlist</option>
+                    <option value="">Sem Playlist</option>
                     {playlists.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -208,13 +208,13 @@ export default function Admin() {
                       checked={editDevice.isActive}
                       onChange={e => setEditDevice({ ...editDevice, isActive: e.target.checked })}
                     />
-                    Device is Activated
+                    Dispositivo Ativado
                   </label>
                 </div>
               </div>
               <div className="admin-modal-footer">
-                <button type="button" className="admin-btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="admin-btn-primary">Save Changes</button>
+                <button type="button" className="admin-btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                <button type="submit" className="admin-btn-primary">Salvar</button>
               </div>
             </form>
           </div>

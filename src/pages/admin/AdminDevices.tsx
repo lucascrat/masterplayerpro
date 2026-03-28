@@ -13,11 +13,11 @@ export default function AdminDevices({ devices, playlists, onToggleActive, onDel
     <>
       <div className="admin-page-header">
         <div>
-          <h1>Devices</h1>
-          <p>Manage user devices and activations</p>
+          <h1>Dispositivos</h1>
+          <p>Gerencie dispositivos e ativações de usuários</p>
         </div>
         <button className="admin-btn-primary" onClick={() => onOpenEdit({ id: '', macAddress: '', isActive: false, playlist: null })}>
-          + Add Device
+          + Adicionar Dispositivo
         </button>
       </div>
 
@@ -25,10 +25,10 @@ export default function AdminDevices({ devices, playlists, onToggleActive, onDel
         <table className="admin-table">
           <thead>
             <tr>
-              <th>MAC Address</th>
+              <th>Endereço MAC</th>
               <th>Status</th>
               <th>Playlist</th>
-              <th>Actions</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -37,13 +37,13 @@ export default function AdminDevices({ devices, playlists, onToggleActive, onDel
                 <td><span className="admin-mac">{device.macAddress}</span></td>
                 <td>
                   <span className={`admin-badge ${device.isActive ? 'active' : 'inactive'}`} onClick={() => onToggleActive(device.id, device.isActive)} style={{ cursor: 'pointer' }}>
-                    {device.isActive ? 'Active' : 'Inactive'}
+                    {device.isActive ? 'Ativo' : 'Inativo'}
                   </span>
                 </td>
-                <td>{device.playlist?.name || <span style={{ color: '#555' }}>None</span>}</td>
+                <td>{device.playlist?.name || <span style={{ color: '#555' }}>Nenhuma</span>}</td>
                 <td style={{ display: 'flex', gap: '8px' }}>
-                  <button className="admin-btn-sm" onClick={() => onOpenEdit(device)}>Edit</button>
-                  <button className="admin-btn-sm" style={{ borderColor: 'rgba(139,92,246,0.3)', color: '#8B5CF6' }} onClick={() => onDelete(device.id)}>Delete</button>
+                  <button className="admin-btn-sm" onClick={() => onOpenEdit(device)}>Editar</button>
+                  <button className="admin-btn-sm" style={{ borderColor: 'rgba(139,92,246,0.3)', color: '#8B5CF6' }} onClick={() => onDelete(device.id)}>Excluir</button>
                 </td>
               </tr>
             ))}

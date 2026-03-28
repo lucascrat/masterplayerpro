@@ -20,8 +20,8 @@ export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPa
     <div className="content-page">
       <div className="content-header">
         <button className="back-btn" onClick={onBack}>←</button>
-        <h1>Live TV</h1>
-        <span className="count">{items.length} channels</span>
+        <h1>TV ao Vivo</h1>
+        <span className="count">{items.length} canais</span>
         {onSearch && (
           <button className="topbar-search-btn" onClick={onSearch} title="Buscar (/)">🔍</button>
         )}
@@ -43,7 +43,7 @@ export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPa
           {currentItems.length === 0 ? (
             <div className="empty-state">
               <span>📺</span>
-              <span>No channels available</span>
+              <span>Nenhum canal disponível</span>
             </div>
           ) : (
             currentItems.map((item, idx) => (

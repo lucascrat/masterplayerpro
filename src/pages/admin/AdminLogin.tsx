@@ -19,19 +19,19 @@ export default function AdminLogin({ onLogin, error }: AdminLoginProps) {
         <div className="admin-login-header">
           <div className="admin-logo-icon">MP</div>
           <h1>Krator+ Admin</h1>
-          <p>Please enter your access key</p>
+          <p>Digite sua chave de acesso</p>
         </div>
         <form onSubmit={handleSubmit}>
           <input
             type="password"
             className="admin-input"
-            placeholder="Key"
+            placeholder="Chave de acesso"
             value={password}
             onChange={e => setPassword(e.target.value)}
             autoFocus
           />
           {error && <div className="admin-error">{error}</div>}
-          <button type="submit" className="admin-btn-primary">Login</button>
+          <button type="submit" className="admin-btn-primary">Entrar</button>
         </form>
       </div>
     </div>

@@ -225,7 +225,7 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch }
   const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<{ name: string; episodes: M3UItem[] } | null>(null);
 
-  const isSeriesMode = title === 'Series' || items.some(i => /S\d{1,2}\s*[xXeE]\d{1,2}/i.test(i.name));
+  const isSeriesMode = title === 'Séries' || title === 'Series' || items.some(i => /S\d{1,2}\s*[xXeE]\d{1,2}/i.test(i.name));
 
   // Build display groups:
   // - Movies: group by category → M3UItem[]

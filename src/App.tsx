@@ -134,11 +134,11 @@ export default function App() {
       )}
 
       {currentPage === 'movies' && (
-        <MovieGridPage title="Movies" items={playlist?.movies || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
+        <MovieGridPage title="Filmes" items={playlist?.movies || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
       )}
 
       {currentPage === 'series' && (
-        <MovieGridPage title="Series" items={playlist?.series || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
+        <MovieGridPage title="Séries" items={playlist?.series || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
       )}
 
       {currentPage === 'search' && (
