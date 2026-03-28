@@ -9,6 +9,7 @@ interface MovieGridPageProps {
   items: M3UItem[];
   onBack: () => void;
   onPlay: (url: string) => void;
+  onSearch?: () => void;
 }
 
 // ── Batch poster fetch ──────────────────────────────────────────────
@@ -220,7 +221,7 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
 }
 
 // ── Main Page ───────────────────────────────────────────────────────
-export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGridPageProps) {
+export default function MovieGridPage({ title, items, onBack, onPlay, onSearch }: MovieGridPageProps) {
   const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<{ name: string; episodes: M3UItem[] } | null>(null);
 
@@ -319,6 +320,9 @@ export default function MovieGridPage({ title, items, onBack, onPlay }: MovieGri
           {totalCount} {isSeriesMode ? 'séries' : 'títulos'}
           {isSeriesMode && ` · ${items.length} ep`}
         </span>
+        {onSearch && (
+          <button className="topbar-search-btn" onClick={onSearch} title="Buscar (/)">🔍</button>
+        )}
       </div>
 
       {/* Hero */}

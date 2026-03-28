@@ -6,9 +6,10 @@ interface LiveTvPageProps {
   items: M3UItem[];
   onBack: () => void;
   onPlay: (url: string) => void;
+  onSearch?: () => void;
 }
 
-export default function LiveTvPage({ items, onBack, onPlay }: LiveTvPageProps) {
+export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPageProps) {
   const groups = groupByCategory(items);
   const categories = Object.keys(groups);
   const [selectedCat, setSelectedCat] = useState(categories[0] || '');
@@ -21,6 +22,9 @@ export default function LiveTvPage({ items, onBack, onPlay }: LiveTvPageProps) {
         <button className="back-btn" onClick={onBack}>←</button>
         <h1>Live TV</h1>
         <span className="count">{items.length} channels</span>
+        {onSearch && (
+          <button className="topbar-search-btn" onClick={onSearch} title="Buscar (/)">🔍</button>
+        )}
       </div>
       <div className="content-layout">
         <div className="category-sidebar">

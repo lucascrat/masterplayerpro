@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession } from './types';
@@ -88,6 +88,23 @@ export default function App() {
   }, [session]);
 
   const handleBack = () => setCurrentPage('home');
+  const goSearch = useCallback(() => setCurrentPage('search'), []);
+
+  // Global keyboard shortcut: '/' or Ctrl+F → open search
+  useEffect(() => {
+    if (!session) return;
+    const handler = (e: KeyboardEvent) => {
+      // Don't hijack when user is typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === '/' || (e.ctrlKey && e.key === 'f')) {
+        e.preventDefault();
+        setCurrentPage('search');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [session]);
 
   // Loading screen
   if (currentPage === 'loading') {
@@ -113,15 +130,15 @@ export default function App() {
       )}
 
       {currentPage === 'livetv' && (
-        <LiveTvPage items={playlist?.live || []} onBack={handleBack} onPlay={setPlayingUrl} />
+        <LiveTvPage items={playlist?.live || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
       )}
 
       {currentPage === 'movies' && (
-        <MovieGridPage title="Movies" items={playlist?.movies || []} onBack={handleBack} onPlay={setPlayingUrl} />
+        <MovieGridPage title="Movies" items={playlist?.movies || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
       )}
 
       {currentPage === 'series' && (
-        <MovieGridPage title="Series" items={playlist?.series || []} onBack={handleBack} onPlay={setPlayingUrl} />
+        <MovieGridPage title="Series" items={playlist?.series || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
       )}
 
       {currentPage === 'search' && (
