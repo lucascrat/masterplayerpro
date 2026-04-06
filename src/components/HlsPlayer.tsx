@@ -128,8 +128,17 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     if (useHls) {
       // ── HLS manifest (.m3u8) ─────────────────────────────────────
-      // effectiveUrl is already proxied if needed (avoids XHR mixed-content block)
-      if (Hls.isSupported()) {
+      // Priority: Safari native → HLS.js → Error
+      // Safari has better native HLS support than HLS.js
+      const canPlayNative = video.canPlayType('application/vnd.apple.mpegurl');
+
+      if (canPlayNative === 'probably' || canPlayNative === 'maybe') {
+        // Safari/iOS — use native HLS support first (more reliable)
+        video.src = url;
+        video.load();
+        video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
+      } else if (Hls.isSupported()) {
+        // Fallback to HLS.js for other browsers
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
@@ -155,11 +164,6 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
             }
           }
         });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari/iOS — native HLS support, use original URL
-        video.src = url;
-        video.load();
-        video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
       } else {
         clearTO();
         setError('Seu browser não suporta HLS.');
