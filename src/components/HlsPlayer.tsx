@@ -42,6 +42,10 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const el    = containerRef.current;
     if (!el || !video) return;
 
+    // Detect iOS/Safari to skip problematic fullscreen logic
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|Firefox/.test(navigator.userAgent);
+
     const tryFullscreen = () => {
       const req =
         el.requestFullscreen?.bind(el) ||
@@ -52,10 +56,12 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     const tryVideoFs = () => {
       const enterFS = (video as any).webkitEnterFullscreen;
-      if (enterFS) { fsEnteredRef.current = true; enterFS.call(video); }
+      if (enterFS && !isIOS) { fsEnteredRef.current = true; enterFS.call(video); }
     };
 
+    // Skip automatic fullscreen on iOS — let native player handle it
     const timer = setTimeout(() => {
+      if (isIOS || isSafari) return;
       if (document.fullscreenElement || (document as any).webkitFullscreenElement) return;
       (video as any).webkitEnterFullscreen ? tryVideoFs() : tryFullscreen();
     }, 300);
@@ -150,8 +156,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari — native HLS support, use original URL
+        // Safari/iOS — native HLS support, use original URL
         video.src = url;
+        video.load();
         video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
       } else {
         clearTO();
@@ -195,6 +202,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
         controls
         playsInline
         autoPlay
+        crossOrigin="anonymous"
+        preload="auto"
       />
 
       {/* Loading spinner */}
@@ -268,6 +277,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
             borderRadius: 8, padding: '10px 18px',
             fontSize: '1rem', cursor: 'pointer',
             zIndex: 10000, backdropFilter: 'blur(4px)',
+            touchAction: 'manipulation',
           }}
         >
           ✕
