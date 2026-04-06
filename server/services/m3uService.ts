@@ -261,8 +261,23 @@ export async function preloadAllPlaylists(): Promise<void> {
     refConfig = config;
     console.log(`[Preload] IPTV server: ${config.origin} | ref: ${config.username}`);
 
+    // Force output=m3u8 so ALL content types (movies, series, live) get HLS
+    // (.m3u8) stream URLs instead of MP4. This is required for iOS Safari
+    // which can play native HLS but struggles with MP4 over a proxy.
+    let fetchUrl = config.url;
+    try {
+      const parsedUrl = new URL(config.url);
+      if (parsedUrl.searchParams.has('username')) {
+        // Xtream Codes get.php format — set output=m3u8
+        parsedUrl.searchParams.set('output', 'm3u8');
+        parsedUrl.searchParams.set('type', 'm3u_plus');
+        fetchUrl = parsedUrl.toString();
+        console.log(`[Preload] Forcing output=m3u8 for HLS compatibility`);
+      }
+    } catch { /* keep original url if parsing fails */ }
+
     const start = Date.now();
-    cachedData = await parseM3U(config.url);
+    cachedData = await parseM3U(fetchUrl);
     cachedAt = Date.now();
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 

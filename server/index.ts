@@ -64,16 +64,25 @@ app.get('/api/proxy', async (req, res) => {
   }
 
   try {
+    // Forward Range header from client — required for iOS Safari MP4 playback.
+    // iOS Safari always sends "Range: bytes=0-1" as a preflight before playing;
+    // without forwarding it the IPTV server ignores seek/resume and iOS refuses to play.
+    const rangeHeader = req.headers['range'];
+    const upstreamHeaders: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (compatible; IPTV)',
+      'Accept': '*/*',
+    };
+    if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
+
     const upstream = await axios.get(targetUrl, {
       responseType: 'stream',
       timeout: 0,           // no timeout — live streams run indefinitely
       maxRedirects: 5,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; IPTV)',
-        'Accept': '*/*',
-      },
+      headers: upstreamHeaders,
+      // Don't throw on 206 Partial Content or other 2xx codes
+      validateStatus: (status) => status >= 200 && status < 300,
     });
 
     const contentType = String(upstream.headers['content-type'] || '');
@@ -83,6 +92,8 @@ app.get('/api/proxy', async (req, res) => {
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache');
+    // Tell clients (especially iOS Safari) that we accept range requests
+    res.setHeader('Accept-Ranges', 'bytes');
 
     if (isM3U8) {
       // Collect manifest text, rewrite segment/chunk URLs to go through proxy
@@ -119,9 +130,19 @@ app.get('/api/proxy', async (req, res) => {
     } else {
       // Raw stream / TS segment / MP4 — pipe directly
       res.setHeader('Content-Type', contentType || 'video/MP2T');
+
+      // Forward range-related headers from upstream so iOS Safari can seek
       if (upstream.headers['content-length']) {
         res.setHeader('Content-Length', upstream.headers['content-length'] as string);
       }
+      if (upstream.headers['content-range']) {
+        res.setHeader('Content-Range', upstream.headers['content-range'] as string);
+      }
+
+      // Use 206 if upstream responded with partial content, otherwise 200
+      const statusCode = upstream.status === 206 ? 206 : 200;
+      res.status(statusCode);
+
       // When client disconnects (closes player), destroy upstream to free resources
       req.on('close', () => upstream.data.destroy());
       upstream.data.pipe(res);
