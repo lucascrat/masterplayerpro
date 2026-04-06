@@ -45,6 +45,7 @@ export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps)
   return (
     <div
       onClick={onClose}
+      onTouchEnd={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 8000,
         background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
@@ -54,6 +55,7 @@ export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps)
     >
       <div
         onClick={e => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         style={{
           background: '#141414',
           borderRadius: 16,
@@ -139,13 +141,14 @@ export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps)
             )}
 
             <button
-              onClick={() => onPlay(item.url)}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlay(item.url); }}
               style={{
                 background: '#8B5CF6', color: '#fff', border: 'none',
                 borderRadius: 10, padding: '12px 28px', fontSize: '1rem',
                 fontWeight: 700, cursor: 'pointer', display: 'flex',
                 alignItems: 'center', gap: '0.5rem',
                 boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
+                touchAction: 'manipulation',
               }}
             >
               ▶ Assistir

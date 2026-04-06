@@ -70,6 +70,7 @@ export default function SeriesDetail({ showName, episodes, onPlay, onClose }: Se
   return (
     <div
       onClick={onClose}
+      onTouchEnd={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 9000,
         background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)',
@@ -79,6 +80,7 @@ export default function SeriesDetail({ showName, episodes, onPlay, onClose }: Se
     >
       <div
         onClick={e => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         style={{
           background: '#181818',
           borderRadius: 16,
@@ -174,12 +176,13 @@ export default function SeriesDetail({ showName, episodes, onPlay, onClose }: Se
                     return (
                       <div
                         key={idx}
-                        onClick={() => onPlay(ep.url)}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPlay(ep.url); }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '0.75rem',
                           padding: '0.75rem 1rem',
                           borderBottom: idx < eps.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                           cursor: 'pointer', transition: 'background 0.15s',
+                          touchAction: 'manipulation',
                         }}
                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
