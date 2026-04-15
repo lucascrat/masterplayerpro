@@ -144,19 +144,33 @@ function buildUserM3uUrl(user: string, pass: string): string {
 
 /**
  * Rewrite all stream URLs in cached data to use a specific user's credentials.
- * Replaces /refUser/refPass/ → /user/pass/ in every stream URL.
+ * Supports both path-based (/refUser/refPass/) and query-param-based (get.php?username=X) URLs.
  */
 function rewriteForUser(data: PlaylistData, user: string, pass: string): PlaylistData {
   if (!refConfig) return data;
 
-  const fromPattern = `/${refConfig.username}/${refConfig.password}/`;
-  const toPattern = `/${user}/${pass}/`;
+  const fromPathPattern = `/${refConfig.username}/${refConfig.password}/`;
+  const toPathPattern = `/${user}/${pass}/`;
+
+  function rewriteUrl(url: string): string {
+    // Path-based rewrite: /refUser/refPass/ → /user/pass/
+    if (url.includes(fromPathPattern)) {
+      return url.replace(fromPathPattern, toPathPattern);
+    }
+    // Query-param-based rewrite for get.php style stream URLs
+    try {
+      const parsed = new URL(url);
+      if (parsed.searchParams.get('username') === refConfig!.username) {
+        parsed.searchParams.set('username', user);
+        parsed.searchParams.set('password', pass);
+        return parsed.toString();
+      }
+    } catch { /* keep original */ }
+    return url;
+  }
 
   function rewriteItems(items: M3UItem[]): M3UItem[] {
-    return items.map(item => ({
-      ...item,
-      url: item.url.replace(fromPattern, toPattern),
-    }));
+    return items.map(item => ({ ...item, url: rewriteUrl(item.url) }));
   }
 
   return {
@@ -261,18 +275,23 @@ export async function preloadAllPlaylists(): Promise<void> {
     refConfig = config;
     console.log(`[Preload] IPTV server: ${config.origin} | ref: ${config.username}`);
 
-    // Force output=m3u8 so ALL content types (movies, series, live) get HLS
+    // Ensure HLS output so ALL content types (movies, series, live) get HLS
     // (.m3u8) stream URLs instead of MP4. This is required for iOS Safari
     // which can play native HLS but struggles with MP4 over a proxy.
+    // Preserve existing output/type values (e.g. output=hls) — only set defaults if missing.
     let fetchUrl = config.url;
     try {
       const parsedUrl = new URL(config.url);
       if (parsedUrl.searchParams.has('username')) {
-        // Xtream Codes get.php format — set output=m3u8
-        parsedUrl.searchParams.set('output', 'm3u8');
-        parsedUrl.searchParams.set('type', 'm3u_plus');
+        // Xtream Codes get.php format — ensure HLS output
+        if (!parsedUrl.searchParams.has('output')) {
+          parsedUrl.searchParams.set('output', 'm3u8');
+        }
+        if (!parsedUrl.searchParams.has('type')) {
+          parsedUrl.searchParams.set('type', 'm3u_plus');
+        }
         fetchUrl = parsedUrl.toString();
-        console.log(`[Preload] Forcing output=m3u8 for HLS compatibility`);
+        console.log(`[Preload] HLS output=${parsedUrl.searchParams.get('output')}, type=${parsedUrl.searchParams.get('type')}`);
       }
     } catch { /* keep original url if parsing fails */ }
 

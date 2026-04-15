@@ -75,8 +75,21 @@ export const createPlaylist = async (req: Request, res: Response) => {
   const username = manualUser || auto?.username || null;
   const password = manualPass || auto?.password || null;
 
+  // Auto-detect playlist type from URL params if not provided
+  let playlistType = type || 'M3U';
+  if (!type) {
+    try {
+      const parsedUrl = new URL(url);
+      const urlType = parsedUrl.searchParams.get('type');
+      if (urlType === 'm3u_plus') playlistType = 'M3U_PLUS';
+      if (parsedUrl.pathname.includes('get.php') || parsedUrl.searchParams.has('output')) {
+        playlistType = 'M3U_PLUS';
+      }
+    } catch { /* keep default */ }
+  }
+
   const playlist = await prisma.playlist.create({
-    data: { name, url, type: type || 'M3U', adminId: admin.id, username, password }
+    data: { name, url, type: playlistType, adminId: admin.id, username, password }
   });
   res.json(playlist);
 };
