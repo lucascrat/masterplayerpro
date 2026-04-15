@@ -9,7 +9,7 @@ import axios from 'axios';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -195,7 +195,7 @@ app.post('/api/tmdb/posters', async (req, res) => {
   res.json(results);
 });
 
-// Client login — validates credentials against the IPTV server
+// Client login — validates credentials against ALL configured IPTV servers
 // and serves cached content with URLs rewritten for the user.
 // No need to register each user in the DB — any valid IPTV account works.
 app.post('/api/auth/login', async (req, res) => {
@@ -205,35 +205,21 @@ app.post('/api/auth/login', async (req, res) => {
     return;
   }
   try {
-    // Try to serve from cache immediately (fast path)
-    const cached = getPlaylistForUser(username, password);
-    if (cached) {
-      // Validate credentials against IPTV server in background on first login
-      // For now, validate synchronously to ensure security
-      const valid = await validateCredentials(username, password);
-      if (!valid) {
-        res.status(401).json({ error: 'Usuário ou senha incorretos' });
-        return;
-      }
-      res.json({ success: true, playlistName: 'Krator+', playlist: cached });
-      return;
-    }
-
-    // Cache not ready yet — validate and build on the fly
-    const valid = await validateCredentials(username, password);
-    if (!valid) {
+    // Validate credentials against all configured servers (in parallel)
+    const matchedOrigin = await validateCredentials(username, password);
+    if (!matchedOrigin) {
       res.status(401).json({ error: 'Usuário ou senha incorretos' });
       return;
     }
 
-    // Cache might have loaded by now, try again
-    const retryCache = getPlaylistForUser(username, password);
-    if (retryCache) {
-      res.json({ success: true, playlistName: 'Krator+', playlist: retryCache });
+    // Serve cached content from the matched server
+    const cached = getPlaylistForUser(username, password, matchedOrigin);
+    if (cached) {
+      res.json({ success: true, playlistName: 'Krator+', playlist: cached });
       return;
     }
 
-    // Last resort: load this user's M3U directly (cold start)
+    // Server matched but cache not ready yet
     res.status(503).json({ error: 'Servidor carregando conteúdo. Tente novamente em 30 segundos.' });
   } catch (err: any) {
     res.status(500).json({ error: 'Erro no servidor' });

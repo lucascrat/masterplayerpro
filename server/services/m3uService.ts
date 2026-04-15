@@ -80,10 +80,9 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// REFERENCE-BASED CACHE
-// All users share the same IPTV server — content is identical, only the
-// username/password in stream URLs differs. We cache content from ONE
-// reference account and rewrite URLs for each user on login.
+// MULTI-SERVER CACHE
+// Each playlist can point to a different IPTV server. We cache content from
+// each server separately and try all servers when a user logs in.
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface RefConfig {
@@ -96,9 +95,15 @@ interface RefConfig {
   password: string;
 }
 
-let refConfig: RefConfig | null = null;
-let cachedData: PlaylistData | null = null;
-let cachedAt = 0;
+interface ServerEntry {
+  config: RefConfig;
+  data: PlaylistData | null;
+  cachedAt: number;
+  playlistName: string;
+}
+
+/** All configured servers, keyed by origin (e.g. "http://one-wave.top") */
+const servers = new Map<string, ServerEntry>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
 /**
@@ -132,24 +137,28 @@ function extractConfig(m3uUrl: string): RefConfig | null {
 }
 
 /**
- * Build the M3U URL for a specific user on the same IPTV server.
+ * Build the M3U URL for a specific user on a given IPTV server.
  */
-function buildUserM3uUrl(user: string, pass: string): string {
-  if (!refConfig) throw new Error('No reference config');
-  const parsed = new URL(refConfig.url);
-  parsed.searchParams.set('username', user);
-  parsed.searchParams.set('password', pass);
-  return parsed.toString();
+function buildUserM3uUrl(config: RefConfig, user: string, pass: string): string {
+  const parsed = new URL(config.url);
+  if (parsed.searchParams.has('username')) {
+    // get.php / query-string format
+    parsed.searchParams.set('username', user);
+    parsed.searchParams.set('password', pass);
+    return parsed.toString();
+  }
+  // Path-based format: replace /refUser/refPass/ in URL
+  const fromPattern = `/${config.username}/${config.password}/`;
+  const toPattern = `/${user}/${pass}/`;
+  return config.url.replace(fromPattern, toPattern);
 }
 
 /**
  * Rewrite all stream URLs in cached data to use a specific user's credentials.
  * Supports both path-based (/refUser/refPass/) and query-param-based (get.php?username=X) URLs.
  */
-function rewriteForUser(data: PlaylistData, user: string, pass: string): PlaylistData {
-  if (!refConfig) return data;
-
-  const fromPathPattern = `/${refConfig.username}/${refConfig.password}/`;
+function rewriteForUser(config: RefConfig, data: PlaylistData, user: string, pass: string): PlaylistData {
+  const fromPathPattern = `/${config.username}/${config.password}/`;
   const toPathPattern = `/${user}/${pass}/`;
 
   function rewriteUrl(url: string): string {
@@ -160,7 +169,7 @@ function rewriteForUser(data: PlaylistData, user: string, pass: string): Playlis
     // Query-param-based rewrite for get.php style stream URLs
     try {
       const parsed = new URL(url);
-      if (parsed.searchParams.get('username') === refConfig!.username) {
+      if (parsed.searchParams.get('username') === config.username) {
         parsed.searchParams.set('username', user);
         parsed.searchParams.set('password', pass);
         return parsed.toString();
@@ -181,17 +190,11 @@ function rewriteForUser(data: PlaylistData, user: string, pass: string): Playlis
 }
 
 /**
- * Validate user credentials against the IPTV server.
- * Makes a quick HEAD/partial request to see if the M3U URL responds with valid data.
+ * Validate user credentials against a specific IPTV server.
  */
-export async function validateCredentials(user: string, pass: string): Promise<boolean> {
-  if (!refConfig) return false;
-
-  const url = buildUserM3uUrl(user, pass);
+async function validateAgainstServer(config: RefConfig, user: string, pass: string): Promise<boolean> {
+  const url = buildUserM3uUrl(config, user, pass);
   try {
-    // Use stream mode — read only the first chunk then abort.
-    // The IPTV server ignores Range headers and sends the full 50MB+ file,
-    // so we must use a stream to avoid downloading everything.
     const res = await axios.get(url, {
       timeout: 15000,
       responseType: 'stream',
@@ -204,7 +207,6 @@ export async function validateCredentials(user: string, pass: string): Promise<b
       return false;
     }
 
-    // Read just the first chunk to check for #EXTM3U header
     return new Promise<boolean>((resolve) => {
       let resolved = false;
       const done = (val: boolean) => {
@@ -218,8 +220,6 @@ export async function validateCredentials(user: string, pass: string): Promise<b
 
       res.data.on('error', () => done(false));
       res.data.on('end', () => done(false));
-
-      // Safety timeout
       setTimeout(() => done(false), 10000);
     });
   } catch {
@@ -228,80 +228,144 @@ export async function validateCredentials(user: string, pass: string): Promise<b
 }
 
 /**
- * Get playlist data for a specific user.
+ * Validate user credentials against ALL configured IPTV servers.
+ * Returns the matching server's origin, or null if none matched.
+ */
+export async function validateCredentials(user: string, pass: string): Promise<string | null> {
+  const entries = Array.from(servers.values());
+  if (entries.length === 0) return null;
+
+  // Try all servers in parallel for speed
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      const valid = await validateAgainstServer(entry.config, user, pass);
+      return valid ? entry.config.origin : null;
+    })
+  );
+
+  return results.find(origin => origin !== null) || null;
+}
+
+/**
+ * Get playlist data for a specific user on a specific server.
  * Returns cached content with URLs rewritten for the user's credentials.
  */
-export function getPlaylistForUser(user: string, pass: string): PlaylistData | null {
-  if (!cachedData) return null;
-  return rewriteForUser(cachedData, user, pass);
+export function getPlaylistForUser(user: string, pass: string, serverOrigin: string): PlaylistData | null {
+  const entry = servers.get(serverOrigin);
+  if (!entry || !entry.data) return null;
+  return rewriteForUser(entry.config, entry.data, user, pass);
+}
+
+/**
+ * Try to get playlist for user from ANY cached server.
+ * Returns { playlist, playlistName, origin } or null.
+ */
+export function getPlaylistForUserAnyServer(user: string, pass: string): { playlist: PlaylistData; playlistName: string; origin: string } | null {
+  for (const [origin, entry] of servers) {
+    if (entry.data) {
+      return {
+        playlist: rewriteForUser(entry.config, entry.data, user, pass),
+        playlistName: entry.playlistName,
+        origin,
+      };
+    }
+  }
+  return null;
 }
 
 /**
  * Legacy: get playlist by URL (used by admin/debug endpoints).
  */
 export async function getPlaylist(url: string): Promise<PlaylistData> {
-  if (cachedData && refConfig?.url === url && Date.now() - cachedAt < CACHE_TTL) {
-    return cachedData;
+  // Check if any server cache matches this URL
+  for (const entry of servers.values()) {
+    if (entry.config.url === url && entry.data && Date.now() - entry.cachedAt < CACHE_TTL) {
+      return entry.data;
+    }
   }
-  const data = await parseM3U(url);
-  // If this is the reference URL, update cache
-  if (refConfig && refConfig.url === url) {
-    cachedData = data;
-    cachedAt = Date.now();
-  }
-  return data;
+  return parseM3U(url);
 }
 
 // ── Preload & scheduled refresh ──────────────────────────────────────────────
 
 /**
- * Load the reference playlist from DB and cache it.
+ * Prepare fetch URL: ensure HLS output params are set.
+ */
+function buildFetchUrl(config: RefConfig): string {
+  let fetchUrl = config.url;
+  try {
+    const parsedUrl = new URL(config.url);
+    if (parsedUrl.searchParams.has('username')) {
+      if (!parsedUrl.searchParams.has('output')) {
+        parsedUrl.searchParams.set('output', 'm3u8');
+      }
+      if (!parsedUrl.searchParams.has('type')) {
+        parsedUrl.searchParams.set('type', 'm3u_plus');
+      }
+      fetchUrl = parsedUrl.toString();
+    }
+  } catch { /* keep original */ }
+  return fetchUrl;
+}
+
+/**
+ * Load ALL playlists from DB and cache each one.
  * Called on startup and by the nightly scheduler.
  */
 export async function preloadAllPlaylists(): Promise<void> {
   try {
-    const playlist = await (prisma as any).playlist.findFirst();
-    if (!playlist) {
-      console.log('[Preload] No playlist in DB — nothing to cache');
+    const playlists = await (prisma as any).playlist.findMany();
+    if (!playlists || playlists.length === 0) {
+      console.log('[Preload] No playlists in DB — nothing to cache');
       return;
     }
 
-    const config = extractConfig(playlist.url);
-    if (!config) {
-      console.log('[Preload] Could not extract config from URL:', playlist.url);
-      return;
-    }
+    console.log(`[Preload] Found ${playlists.length} playlist(s) in DB`);
 
-    refConfig = config;
-    console.log(`[Preload] IPTV server: ${config.origin} | ref: ${config.username}`);
-
-    // Ensure HLS output so ALL content types (movies, series, live) get HLS
-    // (.m3u8) stream URLs instead of MP4. This is required for iOS Safari
-    // which can play native HLS but struggles with MP4 over a proxy.
-    // Preserve existing output/type values (e.g. output=hls) — only set defaults if missing.
-    let fetchUrl = config.url;
-    try {
-      const parsedUrl = new URL(config.url);
-      if (parsedUrl.searchParams.has('username')) {
-        // Xtream Codes get.php format — ensure HLS output
-        if (!parsedUrl.searchParams.has('output')) {
-          parsedUrl.searchParams.set('output', 'm3u8');
-        }
-        if (!parsedUrl.searchParams.has('type')) {
-          parsedUrl.searchParams.set('type', 'm3u_plus');
-        }
-        fetchUrl = parsedUrl.toString();
-        console.log(`[Preload] HLS output=${parsedUrl.searchParams.get('output')}, type=${parsedUrl.searchParams.get('type')}`);
+    for (const playlist of playlists) {
+      const config = extractConfig(playlist.url);
+      if (!config) {
+        console.log(`[Preload] Could not extract config from: ${playlist.name}`);
+        continue;
       }
-    } catch { /* keep original url if parsing fails */ }
 
-    const start = Date.now();
-    cachedData = await parseM3U(fetchUrl);
-    cachedAt = Date.now();
-    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      console.log(`[Preload] Loading "${playlist.name}" → ${config.origin} | ref: ${config.username}`);
 
-    const total = cachedData.live.length + cachedData.movies.length + cachedData.series.length;
-    console.log(`[Preload] Cached ${total} items in ${elapsed}s`);
+      const fetchUrl = buildFetchUrl(config);
+      const output = new URL(fetchUrl).searchParams.get('output') || 'default';
+      console.log(`[Preload] HLS output=${output}`);
+
+      try {
+        const start = Date.now();
+        const data = await parseM3U(fetchUrl);
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+        const total = data.live.length + data.movies.length + data.series.length;
+
+        servers.set(config.origin, {
+          config,
+          data,
+          cachedAt: Date.now(),
+          playlistName: playlist.name,
+        });
+
+        console.log(`[Preload] "${playlist.name}" cached ${total} items in ${elapsed}s`);
+      } catch (err: any) {
+        console.error(`[Preload] Error loading "${playlist.name}":`, err.message);
+        // Still register the server config so validation works even without cache
+        if (!servers.has(config.origin)) {
+          servers.set(config.origin, {
+            config,
+            data: null,
+            cachedAt: 0,
+            playlistName: playlist.name,
+          });
+        }
+      }
+    }
+
+    const totalServers = servers.size;
+    const cachedServers = Array.from(servers.values()).filter(s => s.data !== null).length;
+    console.log(`[Preload] Done: ${cachedServers}/${totalServers} servers cached`);
   } catch (err: any) {
     console.error('[Preload] Error:', err.message);
   }
