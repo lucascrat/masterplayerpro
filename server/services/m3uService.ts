@@ -455,16 +455,18 @@ export async function getPlaylist(url: string): Promise<PlaylistData> {
 // ── Preload & scheduled refresh ──────────────────────────────────────────────
 
 /**
- * Prepare fetch URL: ensure HLS output params are set.
+ * Prepare fetch URL: ALWAYS force HLS output for browser playback.
+ * Browsers can't play raw MPEG-TS — they need HLS (.m3u8) manifests.
+ * Regardless of what the admin sets (output=mpegts, output=hls, etc.),
+ * we always force output=m3u8 so stream URLs end in .m3u8 and HLS.js works.
  */
 function buildFetchUrl(config: RefConfig): string {
   let fetchUrl = config.url;
   try {
     const parsedUrl = new URL(config.url);
     if (parsedUrl.searchParams.has('username')) {
-      if (!parsedUrl.searchParams.has('output')) {
-        parsedUrl.searchParams.set('output', 'm3u8');
-      }
+      // Always force m3u8 output — browser player needs HLS
+      parsedUrl.searchParams.set('output', 'm3u8');
       if (!parsedUrl.searchParams.has('type')) {
         parsedUrl.searchParams.set('type', 'm3u_plus');
       }
