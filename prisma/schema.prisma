@@ -120,6 +120,7 @@ model CredentialLease {
   appUserId    String
   credentialId String
   lastActivity DateTime @default(now())
+  isWatching   Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   appUser      AppUser        @relation(fields: [appUserId], references: [id], onDelete: Cascade)

@@ -61,6 +61,8 @@ app.use(express.json());
         UNIQUE("appUserId", "credentialId")
       )
     `);
+    // Add isWatching column to credential_leases if missing
+    await prisma.$executeRawUnsafe(`ALTER TABLE credential_leases ADD COLUMN IF NOT EXISTS "isWatching" BOOLEAN DEFAULT false`);
     console.log('[DB] All tables ready');
   } catch (e: any) {
     console.log('[DB] Migration note:', e.message);
@@ -300,11 +302,12 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Heartbeat — keeps the credential lease alive
+// isWatching: true = player open (5min timeout), false = idle (2min timeout)
 app.post('/api/auth/heartbeat', async (req, res) => {
-  const { userId } = req.body;
+  const { userId, isWatching } = req.body;
   if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
   try {
-    const renewed = await renewLease(userId);
+    const renewed = await renewLease(userId, !!isWatching);
     res.json({ success: renewed });
   } catch {
     res.json({ success: false });

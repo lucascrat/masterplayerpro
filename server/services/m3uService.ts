@@ -565,7 +565,8 @@ export function scheduleNightlyRefresh(): void {
 // CREDENTIAL LEASE MANAGEMENT
 // ══════════════════════════════════════════════════════════════════════════════
 
-const LEASE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const LEASE_TIMEOUT_WATCHING_MS = 5 * 60 * 1000; // 5 minutes if watching
+const LEASE_TIMEOUT_IDLE_MS = 2 * 60 * 1000;     // 2 minutes if idle (not watching)
 
 /**
  * Acquire an IPTV credential for an app user.
@@ -598,11 +599,8 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
   }
 
   // Find a credential with available slots
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - LEASE_TIMEOUT_MS);
-
-  // Clean expired leases first
-  await prisma.credentialLease.deleteMany({ where: { lastActivity: { lt: cutoff } } });
+  // Clean expired leases first (use the shorter idle timeout as baseline)
+  await cleanupExpiredLeases();
 
   // Get all active credentials with their lease counts
   const credentials = await prisma.iptvCredential.findMany({
@@ -654,12 +652,14 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
 }
 
 /**
- * Renew a lease (heartbeat). Updates lastActivity to keep the lease alive.
+ * Renew a lease (heartbeat). Updates lastActivity and watching status.
+ * isWatching=true means the user has the player open (longer timeout).
+ * isWatching=false means idle/browsing (shorter timeout for faster release).
  */
-export async function renewLease(appUserId: string): Promise<boolean> {
+export async function renewLease(appUserId: string, isWatching: boolean = false): Promise<boolean> {
   const result = await prisma.credentialLease.updateMany({
     where: { appUserId },
-    data: { lastActivity: new Date() },
+    data: { lastActivity: new Date(), isWatching },
   });
   return result.count > 0;
 }
@@ -672,18 +672,31 @@ export async function releaseLease(appUserId: string): Promise<void> {
 }
 
 /**
- * Clean up expired leases (inactive for > 5 minutes).
- * Should be called periodically via setInterval.
+ * Clean up expired leases using smart timeouts:
+ * - Watching (player open): expires after 5 minutes of no heartbeat
+ * - Idle (no player): expires after 2 minutes of no heartbeat
+ * This releases credentials much faster when users aren't actively watching.
  */
 export async function cleanupExpiredLeases(): Promise<number> {
-  const cutoff = new Date(Date.now() - LEASE_TIMEOUT_MS);
-  const result = await prisma.credentialLease.deleteMany({
-    where: { lastActivity: { lt: cutoff } },
+  const now = Date.now();
+  const watchingCutoff = new Date(now - LEASE_TIMEOUT_WATCHING_MS);
+  const idleCutoff = new Date(now - LEASE_TIMEOUT_IDLE_MS);
+
+  // Delete idle leases (not watching) older than 2 min
+  const idleResult = await prisma.credentialLease.deleteMany({
+    where: { isWatching: false, lastActivity: { lt: idleCutoff } },
   });
-  if (result.count > 0) {
-    console.log(`[Leases] Cleaned up ${result.count} expired lease(s)`);
+
+  // Delete watching leases older than 5 min (stale — user probably closed browser)
+  const watchResult = await prisma.credentialLease.deleteMany({
+    where: { isWatching: true, lastActivity: { lt: watchingCutoff } },
+  });
+
+  const total = idleResult.count + watchResult.count;
+  if (total > 0) {
+    console.log(`[Leases] Cleaned up ${total} expired lease(s) (${idleResult.count} idle, ${watchResult.count} stale-watching)`);
   }
-  return result.count;
+  return total;
 }
 
 /**

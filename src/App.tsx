@@ -76,15 +76,26 @@ export default function App() {
   }, []);
 
   // Heartbeat: keep credential lease alive (every 60s) + refresh playlist (every 5min)
+  // Sends isWatching=true when player is open, false when idle.
+  // Server uses different timeouts: 5min for watching, 2min for idle.
   useEffect(() => {
     if (!session) return;
 
-    // Heartbeat every 60s to keep lease alive
-    const heartbeatInterval = setInterval(() => {
+    const sendHeartbeat = () => {
       if (session?.userId) {
-        axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId }, { timeout: 10000 }).catch(() => {});
+        const isWatching = playingUrl !== null && !document.hidden;
+        axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId, isWatching }, { timeout: 10000 }).catch(() => {});
       }
-    }, 60 * 1000);
+    };
+
+    // Heartbeat every 60s
+    const heartbeatInterval = setInterval(sendHeartbeat, 60 * 1000);
+
+    // When tab becomes hidden/visible, send heartbeat immediately to update status
+    const onVisibilityChange = () => {
+      sendHeartbeat();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Refresh playlist every 5 minutes
     const refreshInterval = setInterval(async () => {
@@ -112,12 +123,21 @@ export default function App() {
     return () => {
       clearInterval(heartbeatInterval);
       clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('beforeunload', onBeforeUnload);
     };
-  }, [session]);
+  }, [session, playingUrl]);
 
   const handleBack = () => setCurrentPage('home');
   const goSearch = useCallback(() => setCurrentPage('search'), []);
+
+  // When user stops watching, immediately tell server (faster credential release)
+  const handleStopPlaying = useCallback(() => {
+    setPlayingUrl(null);
+    if (session?.userId) {
+      axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId, isWatching: false }, { timeout: 10000 }).catch(() => {});
+    }
+  }, [session]);
 
   // Global keyboard shortcut: '/' or Ctrl+F → open search
   useEffect(() => {
@@ -179,7 +199,7 @@ export default function App() {
       )}
 
       {playingUrl && (
-        <HlsPlayer url={playingUrl} onClose={() => setPlayingUrl(null)} />
+        <HlsPlayer url={playingUrl} onClose={handleStopPlaying} />
       )}
     </div>
   );
