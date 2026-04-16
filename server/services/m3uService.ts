@@ -334,6 +334,49 @@ export async function loadPlaylistOnDemand(user: string, pass: string, serverOri
 }
 
 /**
+ * Debug: return status of all configured servers.
+ */
+export function getServersStatus(): any[] {
+  const result: any[] = [];
+  for (const [origin, entry] of servers) {
+    result.push({
+      origin,
+      playlistName: entry.playlistName,
+      refUsername: entry.config.username,
+      refUrl: entry.config.url.substring(0, 80) + '...',
+      fetchUrl: buildFetchUrl(entry.config).substring(0, 80) + '...',
+      hasCachedData: !!entry.data,
+      cachedAt: entry.cachedAt ? new Date(entry.cachedAt).toISOString() : null,
+      itemCounts: entry.data ? {
+        live: entry.data.live.length,
+        movies: entry.data.movies.length,
+        series: entry.data.series.length,
+      } : null,
+    });
+  }
+  return result;
+}
+
+/**
+ * Debug: test fetching a M3U URL and return first 500 chars + status.
+ */
+export async function testFetchM3U(url: string): Promise<{ status: number; contentType: string; preview: string; size: number }> {
+  const res = await axios.get(url, {
+    timeout: 30000,
+    responseType: 'text',
+    maxContentLength: 100 * 1024 * 1024,
+    validateStatus: () => true,
+  });
+  const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+  return {
+    status: res.status,
+    contentType: String(res.headers['content-type'] || ''),
+    preview: text.substring(0, 500),
+    size: text.length,
+  };
+}
+
+/**
  * Legacy: get playlist by URL (used by admin/debug endpoints).
  */
 export async function getPlaylist(url: string): Promise<PlaylistData> {

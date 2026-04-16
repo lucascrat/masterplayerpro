@@ -9,7 +9,7 @@ import axios from 'axios';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -234,6 +234,33 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err: any) {
     console.error('[Login] Error:', err.message);
     res.status(500).json({ error: 'Erro no servidor' });
+  }
+});
+
+// Debug: show status of all configured IPTV servers
+app.get('/api/debug/servers', (_req, res) => {
+  res.json(getServersStatus());
+});
+
+// Debug: test fetch a specific playlist URL
+app.get('/api/debug/test-fetch', async (req, res) => {
+  const url = String(req.query['url'] || '');
+  if (!url) { res.status(400).json({ error: 'url param required' }); return; }
+  try {
+    const result = await testFetchM3U(url);
+    res.json(result);
+  } catch (err: any) {
+    res.json({ error: err.message, code: err.code });
+  }
+});
+
+// Debug: force reload all playlists
+app.post('/api/debug/reload', async (_req, res) => {
+  try {
+    await preloadAllPlaylists();
+    res.json({ success: true, servers: getServersStatus() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
