@@ -30,7 +30,7 @@ export default function App() {
   const doLogin = async (username: string, password: string): Promise<boolean> => {
     try {
       const res = await axios.post(`${API_BASE}/auth/login`, { username, password }, { timeout: 45000 });
-      const auth: AuthSession = { username, password, playlistName: res.data.playlistName };
+      const auth: AuthSession = { username, password, playlistName: res.data.playlistName, userId: res.data.userId };
       setSession(auth);
       setPlaylist(res.data.playlist);
       localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
@@ -52,6 +52,10 @@ export default function App() {
   };
 
   const logout = () => {
+    // Release credential lease on explicit logout
+    if (session?.userId) {
+      navigator.sendBeacon(`${API_BASE}/auth/logout`, JSON.stringify({ userId: session.userId }));
+    }
     localStorage.removeItem(AUTH_KEY);
     setSession(null);
     setPlaylist(null);
@@ -71,20 +75,45 @@ export default function App() {
     }
   }, []);
 
-  // Refresh playlist every 5 minutes if logged in
+  // Heartbeat: keep credential lease alive (every 60s) + refresh playlist (every 5min)
   useEffect(() => {
     if (!session) return;
-    const interval = setInterval(async () => {
+
+    // Heartbeat every 60s to keep lease alive
+    const heartbeatInterval = setInterval(() => {
+      if (session?.userId) {
+        axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId }, { timeout: 10000 }).catch(() => {});
+      }
+    }, 60 * 1000);
+
+    // Refresh playlist every 5 minutes
+    const refreshInterval = setInterval(async () => {
       if (session) {
         try {
           const res = await axios.post(`${API_BASE}/auth/login`, { username: session.username, password: session.password }, { timeout: 25000 });
           setPlaylist(res.data.playlist);
         } catch {
-          // Silently ignore refresh errors — don't kick user from content pages
+          // Silently ignore refresh errors
         }
       }
     }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    // Release lease when user closes/navigates away
+    const onBeforeUnload = () => {
+      if (session?.userId) {
+        navigator.sendBeacon(
+          `${API_BASE}/auth/logout`,
+          new Blob([JSON.stringify({ userId: session.userId })], { type: 'application/json' })
+        );
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      clearInterval(refreshInterval);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
   }, [session]);
 
   const handleBack = () => setCurrentPage('home');

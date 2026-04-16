@@ -23,6 +23,7 @@ export interface AuthSession {
   username: string;
   password: string;
   playlistName: string;
+  userId?: string;
 }
 
 export type Page = 'loading' | 'login' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings';

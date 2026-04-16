@@ -9,7 +9,7 @@ import axios from 'axios';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -23,13 +23,49 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Startup migration: add username/password columns to playlists if missing
-prisma.$executeRawUnsafe(`
-  ALTER TABLE playlists
-  ADD COLUMN IF NOT EXISTS username TEXT,
-  ADD COLUMN IF NOT EXISTS password TEXT
-`).then(() => console.log('[DB] Playlist credentials columns ready'))
-  .catch((e: any) => console.log('[DB] Migration note:', e.message));
+// Startup migrations: ensure all tables/columns exist
+(async () => {
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS username TEXT, ADD COLUMN IF NOT EXISTS password TEXT`);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS app_users (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        name TEXT,
+        "isActive" BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS iptv_credentials (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        "playlistId" TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+        "maxLeases" INTEGER DEFAULT 2,
+        "isActive" BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(username, "playlistId")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS credential_leases (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        "appUserId" TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        "credentialId" TEXT NOT NULL REFERENCES iptv_credentials(id) ON DELETE CASCADE,
+        "lastActivity" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE("appUserId", "credentialId")
+      )
+    `);
+    console.log('[DB] All tables ready');
+  } catch (e: any) {
+    console.log('[DB] Migration note:', e.message);
+  }
+})();
 
 // Ensure a default AdminUser exists (required for playlist FK)
 (async () => {
@@ -195,9 +231,9 @@ app.post('/api/tmdb/posters', async (req, res) => {
   res.json(results);
 });
 
-// Client login — validates credentials against ALL configured IPTV servers
-// and serves cached content with URLs rewritten for the user.
-// No need to register each user in the DB — any valid IPTV account works.
+// Client login — authenticates AppUser, acquires IPTV credential from pool,
+// and returns playlist with URLs rewritten for the assigned credential.
+// Falls back to direct IPTV validation for backwards compatibility.
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -205,21 +241,47 @@ app.post('/api/auth/login', async (req, res) => {
     return;
   }
   try {
-    // Validate credentials against all configured servers (in parallel)
+    // 1. Try AppUser authentication (new pool system)
+    const appUser = await prisma.appUser.findUnique({ where: { username } });
+    if (appUser) {
+      if (!appUser.isActive) {
+        res.status(403).json({ error: 'Conta desativada. Contate o administrador.' });
+        return;
+      }
+      if (appUser.password !== password) {
+        res.status(401).json({ error: 'Usuário ou senha incorretos' });
+        return;
+      }
+
+      // Acquire a credential from the pool
+      const result = await acquireCredential(appUser.id);
+      if (!result) {
+        res.status(503).json({ error: 'Nenhuma credencial disponível no momento. Tente novamente em alguns minutos.' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        playlistName: result.playlistName,
+        playlist: result.playlist,
+        userId: appUser.id,
+      });
+      return;
+    }
+
+    // 2. Fallback: direct IPTV server validation (legacy/backwards compat)
     const matchedOrigin = await validateCredentials(username, password);
     if (!matchedOrigin) {
       res.status(401).json({ error: 'Usuário ou senha incorretos' });
       return;
     }
 
-    // Serve cached content from the matched server
     const cached = getPlaylistForUser(username, password, matchedOrigin);
     if (cached) {
       res.json({ success: true, playlistName: 'Krator+', playlist: cached });
       return;
     }
 
-    // Cache not ready — load on the fly (first login or preload failed)
     try {
       const onDemand = await loadPlaylistOnDemand(username, password, matchedOrigin);
       if (onDemand) {
@@ -234,6 +296,30 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err: any) {
     console.error('[Login] Error:', err.message);
     res.status(500).json({ error: 'Erro no servidor' });
+  }
+});
+
+// Heartbeat — keeps the credential lease alive
+app.post('/api/auth/heartbeat', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
+  try {
+    const renewed = await renewLease(userId);
+    res.json({ success: renewed });
+  } catch {
+    res.json({ success: false });
+  }
+});
+
+// Logout — releases the credential lease back to the pool
+app.post('/api/auth/logout', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
+  try {
+    await releaseLease(userId);
+    res.json({ success: true });
+  } catch {
+    res.json({ success: true });
   }
 });
 
@@ -319,4 +405,7 @@ app.listen(PORT, () => {
 
   // Schedule automatic M3U refresh at 3:00 AM daily
   scheduleNightlyRefresh();
+
+  // Start credential lease cleanup (every 60s, removes leases inactive > 5min)
+  startLeaseCleanup();
 });

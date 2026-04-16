@@ -61,6 +61,7 @@ model Playlist {
 
   admin       AdminUser @relation(fields: [adminId], references: [id])
   devices     Device[]
+  credentials IptvCredential[]
 
   @@map("playlists")
 }
@@ -69,6 +70,63 @@ enum PlaylistType {
   M3U
   M3U_PLUS
   XTREAM
+}
+
+// ==========================================
+// USUÁRIOS DO APP (cadastrados pelo admin)
+// ==========================================
+
+model AppUser {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leases    CredentialLease[]
+
+  @@map("app_users")
+}
+
+// ==========================================
+// CREDENCIAIS IPTV (pool compartilhado)
+// ==========================================
+
+model IptvCredential {
+  id         String   @id @default(uuid())
+  username   String
+  password   String
+  playlistId String
+  maxLeases  Int      @default(2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  leases     CredentialLease[]
+
+  @@unique([username, playlistId])
+  @@map("iptv_credentials")
+}
+
+// ==========================================
+// LEASES (quem está usando qual credencial)
+// ==========================================
+
+model CredentialLease {
+  id           String   @id @default(uuid())
+  appUserId    String
+  credentialId String
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  appUser      AppUser        @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  credential   IptvCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@unique([appUserId, credentialId])
+  @@map("credential_leases")
 }
 
 // ==========================================

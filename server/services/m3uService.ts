@@ -560,3 +560,136 @@ export function scheduleNightlyRefresh(): void {
     setInterval(preloadAllPlaylists, 24 * 60 * 60 * 1000);
   }, ms);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CREDENTIAL LEASE MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+const LEASE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Acquire an IPTV credential for an app user.
+ * Finds an available credential (with < maxLeases active), creates a lease,
+ * and returns the playlist with URLs rewritten for that credential.
+ */
+export async function acquireCredential(appUserId: string): Promise<{ playlist: PlaylistData; playlistName: string; credentialId: string } | null> {
+  // First, check if user already has an active lease — reuse it
+  const existingLease = await prisma.credentialLease.findFirst({
+    where: { appUserId },
+    include: { credential: { include: { playlist: true } } },
+  });
+
+  if (existingLease) {
+    // Renew the lease
+    await prisma.credentialLease.update({
+      where: { id: existingLease.id },
+      data: { lastActivity: new Date() },
+    });
+
+    const cred = existingLease.credential;
+    const entry = servers.get(new URL(cred.playlist.url).origin);
+    if (entry?.data) {
+      return {
+        playlist: rewriteForUser(entry.config, entry.data, cred.username, cred.password),
+        playlistName: cred.playlist.name,
+        credentialId: cred.id,
+      };
+    }
+  }
+
+  // Find a credential with available slots
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - LEASE_TIMEOUT_MS);
+
+  // Clean expired leases first
+  await prisma.credentialLease.deleteMany({ where: { lastActivity: { lt: cutoff } } });
+
+  // Get all active credentials with their lease counts
+  const credentials = await prisma.iptvCredential.findMany({
+    where: { isActive: true },
+    include: {
+      playlist: true,
+      leases: true,
+    },
+  });
+
+  // Find one with available slots
+  for (const cred of credentials) {
+    if (cred.leases.length < cred.maxLeases) {
+      // Create lease
+      const lease = await prisma.credentialLease.create({
+        data: { appUserId, credentialId: cred.id },
+      });
+
+      // Find the server entry for this playlist
+      let entry: ServerEntry | undefined;
+      try {
+        const origin = new URL(cred.playlist.url).origin;
+        entry = servers.get(origin);
+      } catch {}
+
+      if (entry?.data) {
+        return {
+          playlist: rewriteForUser(entry.config, entry.data, cred.username, cred.password),
+          playlistName: cred.playlist.name,
+          credentialId: cred.id,
+        };
+      }
+
+      // Cache not ready — try on-demand load
+      try {
+        const origin = new URL(cred.playlist.url).origin;
+        const result = await loadPlaylistOnDemand(cred.username, cred.password, origin);
+        if (result) {
+          return { ...result, credentialId: cred.id };
+        }
+      } catch {}
+
+      // Clean up lease if we couldn't get the playlist
+      await prisma.credentialLease.delete({ where: { id: lease.id } });
+    }
+  }
+
+  return null; // No credentials available
+}
+
+/**
+ * Renew a lease (heartbeat). Updates lastActivity to keep the lease alive.
+ */
+export async function renewLease(appUserId: string): Promise<boolean> {
+  const result = await prisma.credentialLease.updateMany({
+    where: { appUserId },
+    data: { lastActivity: new Date() },
+  });
+  return result.count > 0;
+}
+
+/**
+ * Release all leases for a user (explicit logout).
+ */
+export async function releaseLease(appUserId: string): Promise<void> {
+  await prisma.credentialLease.deleteMany({ where: { appUserId } });
+}
+
+/**
+ * Clean up expired leases (inactive for > 5 minutes).
+ * Should be called periodically via setInterval.
+ */
+export async function cleanupExpiredLeases(): Promise<number> {
+  const cutoff = new Date(Date.now() - LEASE_TIMEOUT_MS);
+  const result = await prisma.credentialLease.deleteMany({
+    where: { lastActivity: { lt: cutoff } },
+  });
+  if (result.count > 0) {
+    console.log(`[Leases] Cleaned up ${result.count} expired lease(s)`);
+  }
+  return result.count;
+}
+
+/**
+ * Start periodic lease cleanup (every 60 seconds).
+ */
+export function startLeaseCleanup(): void {
+  setInterval(cleanupExpiredLeases, 60 * 1000);
+  console.log('[Leases] Cleanup scheduler started (every 60s)');
+}

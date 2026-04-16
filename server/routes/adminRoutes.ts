@@ -18,4 +18,13 @@ router.post('/playlists', adminController.createPlaylist);
 router.patch('/playlists/:id', adminController.updatePlaylist);
 router.delete('/playlists/:id', adminController.deletePlaylist);
 
+router.get('/app-users', adminController.getAppUsers);
+router.post('/app-users', adminController.createAppUser);
+router.patch('/app-users/:id', adminController.updateAppUser);
+router.delete('/app-users/:id', adminController.deleteAppUser);
+
+router.get('/iptv-credentials', adminController.getIptvCredentials);
+router.post('/iptv-credentials', adminController.createIptvCredential);
+router.delete('/iptv-credentials/:id', adminController.deleteIptvCredential);
+
 export default router;

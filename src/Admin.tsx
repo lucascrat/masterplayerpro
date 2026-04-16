@@ -8,6 +8,7 @@ import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminDevices from './pages/admin/AdminDevices';
 import AdminPlaylists from './pages/admin/AdminPlaylists';
+import AdminUsers from './pages/admin/AdminUsers';
 
 const API_BASE = '/api';
 const ADMIN_SESSION_KEY = 'masterplayer_admin';
@@ -20,6 +21,8 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [playlists, setPlaylists] = useState<any[]>([]);
+  const [appUsers, setAppUsers] = useState<any[]>([]);
+  const [iptvCredentials, setIptvCredentials] = useState<any[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Modal state for editing
@@ -37,12 +40,16 @@ export default function Admin() {
 
   const fetchAll = async () => {
     try {
-      const [dRes, pRes] = await Promise.all([
+      const [dRes, pRes, uRes, cRes] = await Promise.all([
         adminApi.get('/admin/devices'),
-        adminApi.get('/admin/playlists')
+        adminApi.get('/admin/playlists'),
+        adminApi.get('/admin/app-users'),
+        adminApi.get('/admin/iptv-credentials'),
       ]);
       setDevices(dRes.data);
       setPlaylists(pRes.data);
+      setAppUsers(uRes.data);
+      setIptvCredentials(cRes.data);
     } catch (err) {
       console.error('Failed to fetch admin data');
     }
@@ -137,6 +144,55 @@ export default function Admin() {
     }
   };
 
+  // App Users CRUD
+  const createAppUser = async (data: { username: string; password: string; name?: string }) => {
+    try {
+      await adminApi.post('/admin/app-users', data);
+      fetchAll();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Erro ao criar usuário');
+    }
+  };
+
+  const updateAppUser = async (id: string, data: any) => {
+    try {
+      await adminApi.patch(`/admin/app-users/${id}`, data);
+      fetchAll();
+    } catch (err) {
+      alert('Erro ao atualizar usuário');
+    }
+  };
+
+  const deleteAppUser = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+    try {
+      await adminApi.delete(`/admin/app-users/${id}`);
+      fetchAll();
+    } catch (err) {
+      alert('Erro ao excluir usuário');
+    }
+  };
+
+  // IPTV Credentials CRUD
+  const createIptvCredential = async (data: { username: string; password: string; playlistId: string; maxLeases?: number }) => {
+    try {
+      await adminApi.post('/admin/iptv-credentials', data);
+      fetchAll();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Erro ao criar credencial');
+    }
+  };
+
+  const deleteIptvCredential = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta credencial?')) return;
+    try {
+      await adminApi.delete(`/admin/iptv-credentials/${id}`);
+      fetchAll();
+    } catch (err) {
+      alert('Erro ao excluir credencial');
+    }
+  };
+
   if (!isLoggedIn) {
     return <AdminLogin onLogin={handleLogin} error={loginError} />;
   }
@@ -159,6 +215,19 @@ export default function Admin() {
 
       {activeTab === 'playlists' && (
         <AdminPlaylists playlists={playlists} onDelete={deletePlaylist} onAdd={addPlaylist} onUpdate={updatePlaylist} />
+      )}
+
+      {activeTab === 'users' && (
+        <AdminUsers
+          appUsers={appUsers}
+          iptvCredentials={iptvCredentials}
+          playlists={playlists}
+          onCreateUser={createAppUser}
+          onUpdateUser={updateAppUser}
+          onDeleteUser={deleteAppUser}
+          onCreateCredential={createIptvCredential}
+          onDeleteCredential={deleteIptvCredential}
+        />
       )}
 
       {activeTab === 'settings' && (

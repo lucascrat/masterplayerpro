@@ -119,3 +119,92 @@ export const deletePlaylist = async (req: Request, res: Response) => {
   await prisma.playlist.delete({ where: { id } });
   res.json({ success: true });
 };
+
+// ══════════════════════════════════════════════════════════════════════════════
+// APP USERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const getAppUsers = async (_req: Request, res: Response) => {
+  const users = await prisma.appUser.findMany({
+    include: { leases: { include: { credential: { select: { username: true, playlist: { select: { name: true } } } } } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(users);
+};
+
+export const createAppUser = async (req: Request, res: Response) => {
+  const { username, password, name } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+    return;
+  }
+  try {
+    const user = await prisma.appUser.create({ data: { username, password, name: name || null } });
+    res.json(user);
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'Usuário já existe.' });
+      return;
+    }
+    throw err;
+  }
+};
+
+export const updateAppUser = async (req: Request, res: Response) => {
+  const id = String(req.params['id']);
+  const { username, password, name, isActive } = req.body;
+  const data: any = {};
+  if (username !== undefined) data.username = username;
+  if (password !== undefined) data.password = password;
+  if (name !== undefined) data.name = name;
+  if (isActive !== undefined) data.isActive = isActive;
+  const user = await prisma.appUser.update({ where: { id }, data });
+  res.json(user);
+};
+
+export const deleteAppUser = async (req: Request, res: Response) => {
+  const id = String(req.params['id']);
+  await prisma.appUser.delete({ where: { id } });
+  res.json({ success: true });
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IPTV CREDENTIALS
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const getIptvCredentials = async (_req: Request, res: Response) => {
+  const credentials = await prisma.iptvCredential.findMany({
+    include: {
+      playlist: { select: { id: true, name: true } },
+      leases: { include: { appUser: { select: { id: true, username: true } } } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(credentials);
+};
+
+export const createIptvCredential = async (req: Request, res: Response) => {
+  const { username, password, playlistId, maxLeases } = req.body;
+  if (!username || !password || !playlistId) {
+    res.status(400).json({ error: 'Usuário, senha e playlist são obrigatórios.' });
+    return;
+  }
+  try {
+    const cred = await prisma.iptvCredential.create({
+      data: { username, password, playlistId, maxLeases: maxLeases || 2 },
+    });
+    res.json(cred);
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'Credencial já cadastrada nesta playlist.' });
+      return;
+    }
+    throw err;
+  }
+};
+
+export const deleteIptvCredential = async (req: Request, res: Response) => {
+  const id = String(req.params['id']);
+  await prisma.iptvCredential.delete({ where: { id } });
+  res.json({ success: true });
+};

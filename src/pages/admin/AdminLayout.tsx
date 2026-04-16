@@ -12,6 +12,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab, onLogou
     { id: 'dashboard', label: 'Painel', icon: '📊' },
     { id: 'devices', label: 'Dispositivos', icon: '📱' },
     { id: 'playlists', label: 'Playlists', icon: '📁' },
+    { id: 'users', label: 'Usuários', icon: '👥' },
     { id: 'settings', label: 'Configurações', icon: '⚙️' },
   ];
 
