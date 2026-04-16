@@ -21,14 +21,12 @@ function normalize(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-function classifyItem(name: string, group: string): 'live' | 'movie' | 'series' {
+function classifyByGroup(group: string): 'live' | 'movie' | 'series' | null {
   const g = normalize(group);
-  const n = normalize(name);
 
   if (
     g.includes('serie') || g.includes('season') || g.includes('episod') ||
-    g.includes('novela') || g.includes('anime') ||
-    /s\d{1,2}\s*[xe]\d{1,2}/i.test(n)
+    g.includes('novela') || g.includes('anime') || g.includes('dorama')
   ) return 'series';
 
   if (
@@ -37,46 +35,111 @@ function classifyItem(name: string, group: string): 'live' | 'movie' | 'series' 
     g.includes('documentario') || g.includes('documentary')
   ) return 'movie';
 
+  if (
+    g.includes('canai') || g.includes('24hrs') || g.includes('24h') ||
+    g.includes('jogos do dia') || g.includes('radio') || g.includes('adulto')
+  ) return 'live';
+
+  return null;
+}
+
+function classifyByUrl(url: string): 'live' | 'movie' | 'series' | null {
+  // Xtream Codes URL patterns: /movie/user/pass/id, /series/user/pass/id
+  if (url.includes('/movie/')) return 'movie';
+  if (url.includes('/series/')) return 'series';
+  return null;
+}
+
+function classifyItem(name: string, group: string, url?: string): 'live' | 'movie' | 'series' {
+  // 1. Try URL pattern (most reliable for Xtream Codes)
+  if (url) {
+    const byUrl = classifyByUrl(url);
+    if (byUrl) return byUrl;
+  }
+
+  // 2. Try group name
+  const byGroup = classifyByGroup(group);
+  if (byGroup) return byGroup;
+
+  // 3. Try item name
+  const n = normalize(name);
+  if (/s\d{1,2}\s*[xe]\d{1,2}/i.test(n)) return 'series';
+
   return 'live';
 }
 
 // ── Parser ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parse M3U using streaming to handle very large files (100MB+).
+ * Reads the response as a stream and processes line-by-line to avoid
+ * loading the entire file into memory at once.
+ */
 export async function parseM3U(url: string): Promise<PlaylistData> {
-  console.log(`[M3U] Fetching: ${url.substring(0, 60)}...`);
+  console.log(`[M3U] Fetching: ${url.substring(0, 80)}...`);
   const response = await axios.get(url, {
-    timeout: 120000,
-    responseType: 'text',
-    maxContentLength: 100 * 1024 * 1024,
+    timeout: 300000,          // 5 minutes for very large files
+    responseType: 'stream',   // Stream instead of loading all to memory
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
   });
-  const lines = (response.data as string).split('\n');
 
-  const live: M3UItem[] = [];
-  const movies: M3UItem[] = [];
-  const series: M3UItem[] = [];
-  let currentItem: Partial<M3UItem> = {};
+  return new Promise<PlaylistData>((resolve, reject) => {
+    const live: M3UItem[] = [];
+    const movies: M3UItem[] = [];
+    const series: M3UItem[] = [];
+    let currentItem: Partial<M3UItem> = {};
+    let leftover = '';
+    let bytesRead = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('#EXTINF:')) {
-      const nameMatch = line.match(/,(.*)$/);
-      currentItem.name = nameMatch ? nameMatch[1].trim() : 'Unknown';
-      const logoMatch = line.match(/tvg-logo="([^"]*)"/);
-      currentItem.logo = logoMatch ? logoMatch[1] : '';
-      const groupMatch = line.match(/group-title="([^"]*)"/);
-      currentItem.group = groupMatch ? groupMatch[1] : 'Default';
-    } else if (line.startsWith('http')) {
-      currentItem.url = line;
-      const type = classifyItem(currentItem.name || '', currentItem.group || '');
-      currentItem.type = type;
-      if (type === 'series') series.push(currentItem as M3UItem);
-      else if (type === 'movie') movies.push(currentItem as M3UItem);
-      else live.push(currentItem as M3UItem);
-      currentItem = {};
-    }
-  }
+    response.data.on('data', (chunk: Buffer) => {
+      bytesRead += chunk.length;
+      const text = leftover + chunk.toString('utf-8');
+      const lines = text.split('\n');
+      // Last line might be incomplete — save for next chunk
+      leftover = lines.pop() || '';
 
-  console.log(`[M3U] Parsed: ${live.length} live | ${movies.length} movies | ${series.length} series`);
-  return { live, movies, series };
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (line.startsWith('#EXTINF:')) {
+          const nameMatch = line.match(/,(.*)$/);
+          currentItem.name = nameMatch ? nameMatch[1].trim() : 'Unknown';
+          const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+          currentItem.logo = logoMatch ? logoMatch[1] : '';
+          const groupMatch = line.match(/group-title="([^"]*)"/);
+          currentItem.group = groupMatch ? groupMatch[1] : 'Default';
+        } else if (line.startsWith('http')) {
+          currentItem.url = line;
+          const type = classifyItem(currentItem.name || '', currentItem.group || '', line);
+          currentItem.type = type;
+          if (type === 'series') series.push(currentItem as M3UItem);
+          else if (type === 'movie') movies.push(currentItem as M3UItem);
+          else live.push(currentItem as M3UItem);
+          currentItem = {};
+        }
+      }
+    });
+
+    response.data.on('end', () => {
+      // Process any remaining data
+      if (leftover.trim().startsWith('http') && currentItem.name) {
+        currentItem.url = leftover.trim();
+        const type = classifyItem(currentItem.name || '', currentItem.group || '', leftover.trim());
+        currentItem.type = type;
+        if (type === 'series') series.push(currentItem as M3UItem);
+        else if (type === 'movie') movies.push(currentItem as M3UItem);
+        else live.push(currentItem as M3UItem);
+      }
+
+      const mb = (bytesRead / 1024 / 1024).toFixed(1);
+      console.log(`[M3U] Parsed ${mb}MB: ${live.length} live | ${movies.length} movies | ${series.length} series`);
+      resolve({ live, movies, series });
+    });
+
+    response.data.on('error', (err: Error) => {
+      reject(new Error(`Stream error: ${err.message}`));
+    });
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
