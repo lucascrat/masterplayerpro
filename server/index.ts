@@ -220,14 +220,19 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Cache not ready — load on the fly (first login or preload failed)
-    const onDemand = await loadPlaylistOnDemand(username, password, matchedOrigin);
-    if (onDemand) {
-      res.json({ success: true, playlistName: onDemand.playlistName, playlist: onDemand.playlist });
-      return;
+    try {
+      const onDemand = await loadPlaylistOnDemand(username, password, matchedOrigin);
+      if (onDemand) {
+        res.json({ success: true, playlistName: onDemand.playlistName, playlist: onDemand.playlist });
+        return;
+      }
+    } catch (loadErr: any) {
+      console.error('[Login] On-demand load failed:', loadErr.message);
     }
 
     res.status(503).json({ error: 'Servidor carregando conteúdo. Tente novamente em 30 segundos.' });
   } catch (err: any) {
+    console.error('[Login] Error:', err.message);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
