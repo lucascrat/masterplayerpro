@@ -9,7 +9,7 @@ import axios from 'axios';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand } from './services/m3uService';
 import prisma from './db';
 
 dotenv.config();
@@ -219,7 +219,13 @@ app.post('/api/auth/login', async (req, res) => {
       return;
     }
 
-    // Server matched but cache not ready yet
+    // Cache not ready — load on the fly (first login or preload failed)
+    const onDemand = await loadPlaylistOnDemand(username, password, matchedOrigin);
+    if (onDemand) {
+      res.json({ success: true, playlistName: onDemand.playlistName, playlist: onDemand.playlist });
+      return;
+    }
+
     res.status(503).json({ error: 'Servidor carregando conteúdo. Tente novamente em 30 segundos.' });
   } catch (err: any) {
     res.status(500).json({ error: 'Erro no servidor' });

@@ -274,6 +274,40 @@ export function getPlaylistForUserAnyServer(user: string, pass: string): { playl
 }
 
 /**
+ * Load playlist on the fly for a server that has no cached data yet.
+ * Fetches the M3U, caches it, and returns rewritten data for the user.
+ */
+export async function loadPlaylistOnDemand(user: string, pass: string, serverOrigin: string): Promise<{ playlist: PlaylistData; playlistName: string } | null> {
+  const entry = servers.get(serverOrigin);
+  if (!entry) return null;
+
+  // If data is already cached, just rewrite and return
+  if (entry.data) {
+    return {
+      playlist: rewriteForUser(entry.config, entry.data, user, pass),
+      playlistName: entry.playlistName,
+    };
+  }
+
+  // Fetch the M3U using the reference account
+  console.log(`[OnDemand] Loading "${entry.playlistName}" from ${serverOrigin}...`);
+  const fetchUrl = buildFetchUrl(entry.config);
+  const data = await parseM3U(fetchUrl);
+
+  // Cache it for future requests
+  entry.data = data;
+  entry.cachedAt = Date.now();
+
+  const total = data.live.length + data.movies.length + data.series.length;
+  console.log(`[OnDemand] "${entry.playlistName}" cached ${total} items`);
+
+  return {
+    playlist: rewriteForUser(entry.config, data, user, pass),
+    playlistName: entry.playlistName,
+  };
+}
+
+/**
  * Legacy: get playlist by URL (used by admin/debug endpoints).
  */
 export async function getPlaylist(url: string): Promise<PlaylistData> {
