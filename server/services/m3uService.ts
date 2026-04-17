@@ -567,40 +567,49 @@ export function scheduleNightlyRefresh(): void {
 
 const LEASE_TIMEOUT_WATCHING_MS = 5 * 60 * 1000; // 5 minutes if watching
 const LEASE_TIMEOUT_IDLE_MS = 2 * 60 * 1000;     // 2 minutes if idle (not watching)
+const MAX_SCREENS_PER_USER = 2;                   // max simultaneous device sessions
 
 /**
  * Acquire an IPTV credential for an app user.
- * Finds an available credential (with < maxLeases active), creates a lease,
- * and returns the playlist with URLs rewritten for that credential.
+ * Each login creates a new session (device). Max 2 screens per user.
+ * If existingSessionId is provided, reuses that session (page refresh / app reopen).
  */
-export async function acquireCredential(appUserId: string): Promise<{ playlist: PlaylistData; playlistName: string; credentialId: string } | null> {
-  // First, check if user already has an active lease — reuse it
-  const existingLease = await prisma.credentialLease.findFirst({
-    where: { appUserId },
-    include: { credential: { include: { playlist: true } } },
-  });
+export async function acquireCredential(appUserId: string, existingSessionId?: string): Promise<{ playlist: PlaylistData; playlistName: string; credentialId: string; sessionId: string } | null> {
+  // Clean expired leases first
+  await cleanupExpiredLeases();
 
-  if (existingLease) {
-    // Renew the lease
-    await prisma.credentialLease.update({
-      where: { id: existingLease.id },
-      data: { lastActivity: new Date() },
+  // If client sends an existing sessionId, try to reuse that session
+  if (existingSessionId) {
+    const existing = await prisma.credentialLease.findUnique({
+      where: { sessionId: existingSessionId },
+      include: { credential: { include: { playlist: true } } },
     });
-
-    const cred = existingLease.credential;
-    const entry = servers.get(new URL(cred.playlist.url).origin);
-    if (entry?.data) {
-      return {
-        playlist: rewriteForUser(entry.config, entry.data, cred.username, cred.password),
-        playlistName: cred.playlist.name,
-        credentialId: cred.id,
-      };
+    if (existing && existing.appUserId === appUserId) {
+      // Renew the existing session
+      await prisma.credentialLease.update({
+        where: { id: existing.id },
+        data: { lastActivity: new Date() },
+      });
+      const cred = existing.credential;
+      let entry: ServerEntry | undefined;
+      try { entry = servers.get(new URL(cred.playlist.url).origin); } catch {}
+      if (entry?.data) {
+        return {
+          playlist: rewriteForUser(entry.config, entry.data, cred.username, cred.password),
+          playlistName: cred.playlist.name,
+          credentialId: cred.id,
+          sessionId: existing.sessionId,
+        };
+      }
     }
+    // Session not found or expired — fall through to create new one
   }
 
-  // Find a credential with available slots
-  // Clean expired leases first (use the shorter idle timeout as baseline)
-  await cleanupExpiredLeases();
+  // Check how many active sessions this user has
+  const activeSessions = await prisma.credentialLease.count({ where: { appUserId } });
+  if (activeSessions >= MAX_SCREENS_PER_USER) {
+    throw new Error(`SCREEN_LIMIT:Limite de ${MAX_SCREENS_PER_USER} telas atingido. Saia de outro dispositivo primeiro.`);
+  }
 
   // Get all active credentials with their lease counts
   const credentials = await prisma.iptvCredential.findMany({
@@ -614,7 +623,7 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
   // Find one with available slots
   for (const cred of credentials) {
     if (cred.leases.length < cred.maxLeases) {
-      // Create lease
+      // Create lease with unique sessionId for this device
       const lease = await prisma.credentialLease.create({
         data: { appUserId, credentialId: cred.id },
       });
@@ -631,6 +640,7 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
           playlist: rewriteForUser(entry.config, entry.data, cred.username, cred.password),
           playlistName: cred.playlist.name,
           credentialId: cred.id,
+          sessionId: lease.sessionId,
         };
       }
 
@@ -639,7 +649,7 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
         const origin = new URL(cred.playlist.url).origin;
         const result = await loadPlaylistOnDemand(cred.username, cred.password, origin);
         if (result) {
-          return { ...result, credentialId: cred.id };
+          return { ...result, credentialId: cred.id, sessionId: lease.sessionId };
         }
       } catch {}
 
@@ -652,23 +662,22 @@ export async function acquireCredential(appUserId: string): Promise<{ playlist: 
 }
 
 /**
- * Renew a lease (heartbeat). Updates lastActivity and watching status.
- * isWatching=true means the user has the player open (longer timeout).
- * isWatching=false means idle/browsing (shorter timeout for faster release).
+ * Renew a specific session's lease (heartbeat).
+ * Uses sessionId to target the exact device, not all user leases.
  */
-export async function renewLease(appUserId: string, isWatching: boolean = false): Promise<boolean> {
+export async function renewLease(sessionId: string, isWatching: boolean = false): Promise<boolean> {
   const result = await prisma.credentialLease.updateMany({
-    where: { appUserId },
+    where: { sessionId },
     data: { lastActivity: new Date(), isWatching },
   });
   return result.count > 0;
 }
 
 /**
- * Release all leases for a user (explicit logout).
+ * Release a specific session (explicit logout from one device).
  */
-export async function releaseLease(appUserId: string): Promise<void> {
-  await prisma.credentialLease.deleteMany({ where: { appUserId } });
+export async function releaseLease(sessionId: string): Promise<void> {
+  await prisma.credentialLease.deleteMany({ where: { sessionId } });
 }
 
 /**

@@ -133,8 +133,13 @@ export default function AdminUsers({
                 </td>
                 <td>
                   {u.leases.length > 0 ? (
-                    <span style={{ color: '#4caf50', fontSize: '0.82rem' }}>
-                      {u.leases.map(l => l.credential.playlist.name).join(', ')}
+                    <span style={{ fontSize: '0.82rem' }}>
+                      <span style={{ color: u.leases.length >= 2 ? '#f59e0b' : '#4caf50', fontWeight: 600 }}>
+                        {u.leases.length}/2 telas
+                      </span>
+                      <span style={{ color: '#888', marginLeft: 6 }}>
+                        ({u.leases.map(l => l.credential.playlist.name).join(', ')})
+                      </span>
                     </span>
                   ) : (
                     <span style={{ color: '#555', fontSize: '0.82rem' }}>Offline</span>

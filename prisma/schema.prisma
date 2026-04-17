@@ -119,6 +119,7 @@ model CredentialLease {
   id           String   @id @default(uuid())
   appUserId    String
   credentialId String
+  sessionId    String   @unique @default(uuid())
   lastActivity DateTime @default(now())
   isWatching   Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -126,7 +127,8 @@ model CredentialLease {
   appUser      AppUser        @relation(fields: [appUserId], references: [id], onDelete: Cascade)
   credential   IptvCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
-  @@unique([appUserId, credentialId])
+  @@index([appUserId])
+  @@index([sessionId])
   @@map("credential_leases")
 }
 

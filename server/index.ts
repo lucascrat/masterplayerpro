@@ -61,8 +61,15 @@ app.use(express.json());
         UNIQUE("appUserId", "credentialId")
       )
     `);
-    // Add isWatching column to credential_leases if missing
+    // Add isWatching and sessionId columns to credential_leases if missing
     await prisma.$executeRawUnsafe(`ALTER TABLE credential_leases ADD COLUMN IF NOT EXISTS "isWatching" BOOLEAN DEFAULT false`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE credential_leases ADD COLUMN IF NOT EXISTS "sessionId" TEXT`);
+    // Backfill sessionId for any existing rows that don't have one
+    await prisma.$executeRawUnsafe(`UPDATE credential_leases SET "sessionId" = gen_random_uuid() WHERE "sessionId" IS NULL`);
+    // Add unique index on sessionId
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS credential_leases_sessionId_key ON credential_leases("sessionId")`);
+    // Drop old unique constraint if it exists (allow same user+credential on multiple devices)
+    await prisma.$executeRawUnsafe(`ALTER TABLE credential_leases DROP CONSTRAINT IF EXISTS "credential_leases_appUserId_credentialId_key"`);
     console.log('[DB] All tables ready');
   } catch (e: any) {
     console.log('[DB] Migration note:', e.message);
@@ -237,7 +244,7 @@ app.post('/api/tmdb/posters', async (req, res) => {
 // and returns playlist with URLs rewritten for the assigned credential.
 // Falls back to direct IPTV validation for backwards compatibility.
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, sessionId: clientSessionId } = req.body;
   if (!username || !password) {
     res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
     return;
@@ -255,8 +262,17 @@ app.post('/api/auth/login', async (req, res) => {
         return;
       }
 
-      // Acquire a credential from the pool
-      const result = await acquireCredential(appUser.id);
+      // Acquire a credential from the pool (reuses session if clientSessionId provided)
+      let result;
+      try {
+        result = await acquireCredential(appUser.id, clientSessionId);
+      } catch (err: any) {
+        if (err.message?.startsWith('SCREEN_LIMIT:')) {
+          res.status(403).json({ error: err.message.replace('SCREEN_LIMIT:', '') });
+          return;
+        }
+        throw err;
+      }
       if (!result) {
         res.status(503).json({ error: 'Nenhuma credencial disponível no momento. Tente novamente em alguns minutos.' });
         return;
@@ -267,6 +283,7 @@ app.post('/api/auth/login', async (req, res) => {
         playlistName: result.playlistName,
         playlist: result.playlist,
         userId: appUser.id,
+        sessionId: result.sessionId,
       });
       return;
     }
@@ -301,25 +318,25 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Heartbeat — keeps the credential lease alive
+// Heartbeat — keeps the credential lease alive for this specific device session
 // isWatching: true = player open (5min timeout), false = idle (2min timeout)
 app.post('/api/auth/heartbeat', async (req, res) => {
-  const { userId, isWatching } = req.body;
-  if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
+  const { sessionId, isWatching } = req.body;
+  if (!sessionId) { res.status(400).json({ error: 'sessionId required' }); return; }
   try {
-    const renewed = await renewLease(userId, !!isWatching);
+    const renewed = await renewLease(sessionId, !!isWatching);
     res.json({ success: renewed });
   } catch {
     res.json({ success: false });
   }
 });
 
-// Logout — releases the credential lease back to the pool
+// Logout — releases this device's session back to the pool
 app.post('/api/auth/logout', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) { res.status(400).json({ error: 'userId required' }); return; }
+  const { sessionId } = req.body;
+  if (!sessionId) { res.status(400).json({ error: 'sessionId required' }); return; }
   try {
-    await releaseLease(userId);
+    await releaseLease(sessionId);
     res.json({ success: true });
   } catch {
     res.json({ success: true });

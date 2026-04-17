@@ -27,10 +27,10 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const doLogin = async (username: string, password: string): Promise<boolean> => {
+  const doLogin = async (username: string, password: string, existingSessionId?: string): Promise<boolean> => {
     try {
-      const res = await axios.post(`${API_BASE}/auth/login`, { username, password }, { timeout: 45000 });
-      const auth: AuthSession = { username, password, playlistName: res.data.playlistName, userId: res.data.userId };
+      const res = await axios.post(`${API_BASE}/auth/login`, { username, password, sessionId: existingSessionId }, { timeout: 45000 });
+      const auth: AuthSession = { username, password, playlistName: res.data.playlistName, userId: res.data.userId, sessionId: res.data.sessionId };
       setSession(auth);
       setPlaylist(res.data.playlist);
       localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
@@ -52,9 +52,9 @@ export default function App() {
   };
 
   const logout = () => {
-    // Release credential lease on explicit logout
-    if (session?.userId) {
-      navigator.sendBeacon(`${API_BASE}/auth/logout`, JSON.stringify({ userId: session.userId }));
+    // Release this device's session on explicit logout
+    if (session?.sessionId) {
+      navigator.sendBeacon(`${API_BASE}/auth/logout`, JSON.stringify({ sessionId: session.sessionId }));
     }
     localStorage.removeItem(AUTH_KEY);
     setSession(null);
@@ -63,11 +63,12 @@ export default function App() {
   };
 
   // On mount: try to restore session from localStorage
+  // Passes saved sessionId so the server reuses the existing session (no new screen)
   useEffect(() => {
     const saved = localStorage.getItem(AUTH_KEY);
     if (saved) {
       const auth: AuthSession = JSON.parse(saved);
-      doLogin(auth.username, auth.password).then(ok => {
+      doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
         setCurrentPage(ok ? 'home' : 'login');
       });
     } else {
@@ -82,9 +83,9 @@ export default function App() {
     if (!session) return;
 
     const sendHeartbeat = () => {
-      if (session?.userId) {
+      if (session?.sessionId) {
         const isWatching = playingUrl !== null && !document.hidden;
-        axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId, isWatching }, { timeout: 10000 }).catch(() => {});
+        axios.post(`${API_BASE}/auth/heartbeat`, { sessionId: session.sessionId, isWatching }, { timeout: 10000 }).catch(() => {});
       }
     };
 
@@ -97,24 +98,12 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // Refresh playlist every 5 minutes
-    const refreshInterval = setInterval(async () => {
-      if (session) {
-        try {
-          const res = await axios.post(`${API_BASE}/auth/login`, { username: session.username, password: session.password }, { timeout: 25000 });
-          setPlaylist(res.data.playlist);
-        } catch {
-          // Silently ignore refresh errors
-        }
-      }
-    }, 5 * 60 * 1000);
-
-    // Release lease when user closes/navigates away
+    // Release this device's session when user closes/navigates away
     const onBeforeUnload = () => {
-      if (session?.userId) {
+      if (session?.sessionId) {
         navigator.sendBeacon(
           `${API_BASE}/auth/logout`,
-          new Blob([JSON.stringify({ userId: session.userId })], { type: 'application/json' })
+          new Blob([JSON.stringify({ sessionId: session.sessionId })], { type: 'application/json' })
         );
       }
     };
@@ -122,7 +111,6 @@ export default function App() {
 
     return () => {
       clearInterval(heartbeatInterval);
-      clearInterval(refreshInterval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('beforeunload', onBeforeUnload);
     };
@@ -134,8 +122,8 @@ export default function App() {
   // When user stops watching, immediately tell server (faster credential release)
   const handleStopPlaying = useCallback(() => {
     setPlayingUrl(null);
-    if (session?.userId) {
-      axios.post(`${API_BASE}/auth/heartbeat`, { userId: session.userId, isWatching: false }, { timeout: 10000 }).catch(() => {});
+    if (session?.sessionId) {
+      axios.post(`${API_BASE}/auth/heartbeat`, { sessionId: session.sessionId, isWatching: false }, { timeout: 10000 }).catch(() => {});
     }
   }, [session]);
 
