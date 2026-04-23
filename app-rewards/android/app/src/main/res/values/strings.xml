@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Krator Rewards</string>
+    <string name="title_activity_main">Krator Rewards</string>
+    <string name="package_name">com.gravity.kratorrewards</string>
+    <string name="custom_url_scheme">com.gravity.kratorrewards</string>
+</resources>

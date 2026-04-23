@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/app/release
+android/keystore
+*.keystore
+*.jks
+
+# Capacitor
+.capacitor/
+
+# IDE
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

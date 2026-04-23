@@ -13,6 +13,7 @@ import SettingsPage from './pages/client/SettingsPage';
 
 // Components
 import HlsPlayer from './components/HlsPlayer';
+import RewardSessionBadge from './components/RewardSessionBadge';
 
 const API_BASE = '/api';
 const AUTH_KEY = 'masterplayer_auth';
@@ -43,10 +44,43 @@ export default function App() {
     }
   };
 
+  const doCodeLogin = async (code: string, existingSessionId?: string): Promise<boolean> => {
+    try {
+      const res = await axios.post(`${API_BASE}/auth/redeem-code`, { code, sessionId: existingSessionId }, { timeout: 45000 });
+      const auth: AuthSession = {
+        username: `code:${res.data.code}`,
+        password: '',
+        playlistName: res.data.playlistName,
+        userId: res.data.userId,
+        sessionId: res.data.sessionId,
+        rewardCode: res.data.code,
+        accessUntil: res.data.accessUntil,
+        coins: res.data.coins,
+      };
+      setSession(auth);
+      setPlaylist(res.data.playlist);
+      localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+      setLoginError(null);
+      return true;
+    } catch (err: any) {
+      const msg = err.response?.data?.error || 'Erro ao validar código. Tente novamente.';
+      setLoginError(msg);
+      return false;
+    }
+  };
+
   const handleLogin = async (username: string, password: string) => {
     setLoginLoading(true);
     setLoginError(null);
     const ok = await doLogin(username, password);
+    setLoginLoading(false);
+    if (ok) setCurrentPage('home');
+  };
+
+  const handleLoginWithCode = async (code: string) => {
+    setLoginLoading(true);
+    setLoginError(null);
+    const ok = await doCodeLogin(code);
     setLoginLoading(false);
     if (ok) setCurrentPage('home');
   };
@@ -68,6 +102,18 @@ export default function App() {
     const saved = localStorage.getItem(AUTH_KEY);
     if (saved) {
       const auth: AuthSession = JSON.parse(saved);
+      // Rewards code session — skip restore if time already expired
+      if (auth.rewardCode && auth.accessUntil) {
+        if (new Date(auth.accessUntil) <= new Date()) {
+          localStorage.removeItem(AUTH_KEY);
+          setCurrentPage('login');
+          return;
+        }
+        doCodeLogin(auth.rewardCode, auth.sessionId).then(ok => {
+          setCurrentPage(ok ? 'home' : 'login');
+        });
+        return;
+      }
       doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
         setCurrentPage(ok ? 'home' : 'login');
       });
@@ -75,6 +121,18 @@ export default function App() {
       setCurrentPage('login');
     }
   }, []);
+
+  // Auto-logout when a reward-code session expires (accessUntil reached)
+  useEffect(() => {
+    if (!session?.accessUntil) return;
+    const remaining = new Date(session.accessUntil).getTime() - Date.now();
+    if (remaining <= 0) {
+      logout();
+      return;
+    }
+    const timer = setTimeout(() => logout(), remaining + 500);
+    return () => clearTimeout(timer);
+  }, [session?.accessUntil]);
 
   // Heartbeat: keep credential lease alive (every 60s) + refresh playlist (every 5min)
   // Sends isWatching=true when player is open, false when idle.
@@ -159,7 +217,7 @@ export default function App() {
   return (
     <div className="app-container">
       {currentPage === 'login' && (
-        <LoginScreen onLogin={handleLogin} error={loginError} loading={loginLoading} />
+        <LoginScreen onLogin={handleLogin} onLoginWithCode={handleLoginWithCode} error={loginError} loading={loginLoading} />
       )}
 
       {currentPage === 'home' && (
@@ -188,6 +246,10 @@ export default function App() {
 
       {playingUrl && (
         <HlsPlayer url={playingUrl} onClose={handleStopPlaying} />
+      )}
+
+      {session?.rewardCode && session.accessUntil && currentPage !== 'login' && (
+        <RewardSessionBadge code={session.rewardCode} accessUntil={session.accessUntil} coins={session.coins} />
       )}
     </div>
   );

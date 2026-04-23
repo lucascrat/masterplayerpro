@@ -25,6 +25,10 @@ export interface AuthSession {
   playlistName: string;
   userId?: string;
   sessionId?: string;
+  // Rewards-app code session: when set, access expires at this instant.
+  rewardCode?: string;
+  accessUntil?: string; // ISO timestamp
+  coins?: number;
 }
 
 export type Page = 'loading' | 'login' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings';

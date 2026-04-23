@@ -4,10 +4,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import crypto from 'crypto';
 
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
+import rewardsRoutes, { HOURS_PER_COIN } from './routes/rewardsRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
 import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
 import prisma from './db';
@@ -70,6 +72,39 @@ app.use(express.json());
     await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS credential_leases_sessionId_key ON credential_leases("sessionId")`);
     // Drop old unique constraint if it exists (allow same user+credential on multiple devices)
     await prisma.$executeRawUnsafe(`ALTER TABLE credential_leases DROP CONSTRAINT IF EXISTS "credential_leases_appUserId_credentialId_key"`);
+    // Rewards app tables
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS reward_users (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        "deviceId" TEXT UNIQUE NOT NULL,
+        code TEXT UNIQUE NOT NULL,
+        coins INTEGER DEFAULT 5,
+        "accessUntil" TIMESTAMP(3),
+        "appUserId" TEXT UNIQUE REFERENCES app_users(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS video_views (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        "userId" TEXT NOT NULL REFERENCES reward_users(id) ON DELETE CASCADE,
+        "adUnitId" TEXT,
+        "watchedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS video_views_user_watched_idx ON video_views("userId", "watchedAt")`);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ad_nonces (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+        "userId" TEXT NOT NULL REFERENCES reward_users(id) ON DELETE CASCADE,
+        nonce TEXT UNIQUE NOT NULL,
+        "adUnitId" TEXT,
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "redeemedAt" TIMESTAMP(3)
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ad_nonces_user_created_idx ON ad_nonces("userId", "createdAt")`);
     console.log('[DB] All tables ready');
   } catch (e: any) {
     console.log('[DB] Migration note:', e.message);
@@ -94,6 +129,7 @@ app.use(express.json());
 // API Routes
 app.use('/api', deviceRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/rewards', rewardsRoutes);
 
 // ── Stream Proxy ─────────────────────────────────────────────────────────────
 // IPTV servers run on HTTP, app is on HTTPS — browser blocks mixed content.
@@ -314,6 +350,89 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(503).json({ error: 'Servidor carregando conteúdo. Tente novamente em 30 segundos.' });
   } catch (err: any) {
     console.error('[Login] Error:', err.message);
+    res.status(500).json({ error: 'Erro no servidor' });
+  }
+});
+
+// Code login — user typed a KRT-XXXXXX code from the rewards app.
+// Consumes 1 coin if accessUntil is in the past, else renews the live session.
+// Creates/links a synthetic AppUser behind the scenes so the existing credential
+// pool + lease system keeps working unchanged.
+app.post('/api/auth/redeem-code', async (req, res) => {
+  const { code, sessionId: clientSessionId } = req.body || {};
+  if (!code || typeof code !== 'string') {
+    res.status(400).json({ error: 'Código obrigatório' });
+    return;
+  }
+  const normalized = code.trim().toUpperCase();
+  try {
+    const user = await prisma.rewardUser.findUnique({ where: { code: normalized } });
+    if (!user) {
+      res.status(404).json({ error: 'Código inválido' });
+      return;
+    }
+
+    const now = new Date();
+    let accessUntil = user.accessUntil;
+    let updatedCoins = user.coins;
+
+    if (!accessUntil || accessUntil <= now) {
+      if (user.coins <= 0) {
+        res.status(402).json({ error: 'Sem moedas. Assista vídeos no app para ganhar tempo.' });
+        return;
+      }
+      accessUntil = new Date(now.getTime() + HOURS_PER_COIN * 60 * 60 * 1000);
+      const updated = await prisma.rewardUser.update({
+        where: { id: user.id },
+        data: { coins: { decrement: 1 }, accessUntil },
+      });
+      updatedCoins = updated.coins;
+    }
+
+    // Ensure synthetic AppUser exists for this reward user
+    let appUserId = user.appUserId;
+    if (!appUserId) {
+      const synthUsername = `reward_${user.code.replace('-', '_').toLowerCase()}`;
+      const synthPassword = crypto.randomBytes(16).toString('hex');
+      const appUser = await prisma.appUser.upsert({
+        where: { username: synthUsername },
+        create: { username: synthUsername, password: synthPassword, name: `Rewards ${user.code}` },
+        update: {},
+      });
+      appUserId = appUser.id;
+      await prisma.rewardUser.update({
+        where: { id: user.id },
+        data: { appUserId },
+      });
+    }
+
+    let result;
+    try {
+      result = await acquireCredential(appUserId, clientSessionId);
+    } catch (err: any) {
+      if (err.message?.startsWith('SCREEN_LIMIT:')) {
+        res.status(403).json({ error: err.message.replace('SCREEN_LIMIT:', '') });
+        return;
+      }
+      throw err;
+    }
+    if (!result) {
+      res.status(503).json({ error: 'Sem credenciais disponíveis. Tente em alguns minutos.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      playlistName: result.playlistName,
+      playlist: result.playlist,
+      userId: appUserId,
+      sessionId: result.sessionId,
+      code: user.code,
+      coins: updatedCoins,
+      accessUntil: accessUntil.toISOString(),
+    });
+  } catch (err: any) {
+    console.error('[Redeem] Error:', err.message);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });

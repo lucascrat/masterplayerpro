@@ -86,8 +86,58 @@ model AppUser {
   updatedAt DateTime @updatedAt
 
   leases    CredentialLease[]
+  reward    RewardUser?
 
   @@map("app_users")
+}
+
+// ==========================================
+// REWARDS APP (Android) — device-based anonymous accounts
+// Users earn coins by watching AdMob rewarded videos (1 coin = 2h access).
+// Code like "KRT-A3F9B2" is entered in the main Krator+ login.
+// ==========================================
+
+model RewardUser {
+  id           String    @id @default(uuid())
+  deviceId     String    @unique
+  code         String    @unique
+  coins        Int       @default(5)
+  accessUntil  DateTime?
+  appUserId    String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  appUser      AppUser?    @relation(fields: [appUserId], references: [id])
+  videoViews   VideoView[]
+  adNonces     AdNonce[]
+
+  @@map("reward_users")
+}
+
+model VideoView {
+  id         String   @id @default(uuid())
+  userId     String
+  adUnitId   String?
+  watchedAt  DateTime @default(now())
+
+  user       RewardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+  @@map("video_views")
+}
+
+model AdNonce {
+  id         String    @id @default(uuid())
+  userId     String
+  nonce      String    @unique
+  adUnitId   String?
+  createdAt  DateTime  @default(now())
+  redeemedAt DateTime?
+
+  user       RewardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("ad_nonces")
 }
 
 // ==========================================
