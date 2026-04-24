@@ -3,6 +3,7 @@ import { useProfile } from '../lib/profile';
 import { requestAdNonce, creditVideo } from '../api/client';
 import { showRewarded, AD_UNITS } from '../lib/admob';
 import GlassCard from '../components/GlassCard';
+import AccessTimer from '../components/AccessTimer';
 
 type Phase = 'idle' | 'loading' | 'playing' | 'crediting' | 'success' | 'error';
 
@@ -27,7 +28,9 @@ export default function VideosPage() {
       setProfile(updated);
       await refresh();
       setPhase('success');
-      setMsg(`+1 moeda! Você tem ${updated.coins} moedas (${updated.coins * 2}h).`);
+      const until = updated.accessUntil ? new Date(updated.accessUntil) : null;
+      const hLeft = until ? Math.max(0, (until.getTime() - Date.now()) / 3600000) : 0;
+      setMsg(`+1 moeda! ${hLeft.toFixed(1)}h de acesso ativadas agora.`);
       setTimeout(() => setPhase('idle'), 3500);
     } catch (e: any) {
       setPhase('error');
@@ -137,19 +140,18 @@ export default function VideosPage() {
         </GlassCard>
       )}
 
-      {/* Current balance */}
-      <GlassCard className="p-5 flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-widest text-on-surface-variant">Seu saldo</div>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-3xl font-black text-secondary tabular-nums">{profile?.coins ?? 0}</span>
-            <span className="text-sm text-on-surface-variant">moedas</span>
+      {/* Live access timer */}
+      <GlassCard className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-on-surface-variant">Acesso ativo</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-3xl font-black text-secondary tabular-nums">{profile?.coins ?? 0}</span>
+              <span className="text-sm text-on-surface-variant">moedas ganhas</span>
+            </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-widest text-on-surface-variant">Equivale a</div>
-          <div className="text-lg font-bold text-primary mt-1">{(profile?.coins ?? 0) * 2}h</div>
-        </div>
+        <AccessTimer variant="full" />
       </GlassCard>
     </div>
   );

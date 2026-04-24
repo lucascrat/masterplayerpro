@@ -7,7 +7,6 @@ export default function HomePage() {
   const nav = useNavigate();
   const { profile, daily } = useProfile();
 
-  const hoursAvailable = (profile?.coins ?? 0) * (daily?.hoursPerCoin ?? 2);
 
   return (
     <div className="space-y-5 pb-6">
@@ -15,27 +14,28 @@ export default function HomePage() {
       <GlassCard neon="primary" className="p-6">
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary-container/30 blur-[60px] rounded-full" />
         <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-tertiary-container/20 blur-[60px] rounded-full" />
-        <div className="relative text-center space-y-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-on-surface-variant">
-            Saldo atual
-          </span>
-          <div className="flex items-center justify-center gap-3 py-1">
-            <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center neon-glow-accent">
-              <span
-                className="material-symbols-outlined text-on-secondary text-[28px]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                token
-              </span>
-            </div>
-            <span className="text-5xl font-black tabular-nums text-secondary tracking-tight">
-              {profile?.coins ?? 0}
+        <div className="relative space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-on-surface-variant">
+              Acesso Krator+
             </span>
+            <div className="flex items-center gap-1.5 bg-secondary/15 rounded-full px-2.5 py-1">
+              <span className="material-symbols-outlined text-secondary text-[15px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}>token</span>
+              <span className="text-sm font-black text-secondary tabular-nums">{profile?.coins ?? 0}</span>
+              <span className="text-[10px] text-on-surface-variant">moedas</span>
+            </div>
           </div>
-          <p className="text-xs text-on-surface-variant">
-            = {hoursAvailable}h de acesso ao Krator+
-          </p>
-          <AccessTimer />
+          {/* Live countdown hero */}
+          <AccessTimer variant="full" />
+          {/* No access yet */}
+          {!profile?.accessUntil && (
+            <div className="text-center py-3">
+              <p className="text-sm text-on-surface-variant">
+                Assista um vídeo para ativar seu acesso
+              </p>
+            </div>
+          )}
         </div>
       </GlassCard>
 
