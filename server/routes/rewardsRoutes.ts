@@ -42,8 +42,10 @@ router.post('/register', async (req, res) => {
     let user = await prisma.rewardUser.findUnique({ where: { deviceId } });
     if (!user) {
       const code = await generateUniqueCode();
+      // Welcome coins: timer starts immediately on first open
+      const accessUntil = new Date(Date.now() + COIN_START * HOURS_PER_COIN * 60 * 60 * 1000);
       user = await prisma.rewardUser.create({
-        data: { deviceId, code, coins: COIN_START },
+        data: { deviceId, code, coins: COIN_START, accessUntil },
       });
     }
     res.json({
@@ -168,10 +170,16 @@ router.post('/video-watched', async (req, res) => {
       return;
     }
 
+    // Extend accessUntil from max(now, current) — timer starts immediately on earn
+    const now = new Date();
+    const currentUntil = user.accessUntil;
+    const baseTime = currentUntil && currentUntil > now ? currentUntil : now;
+    const newAccessUntil = new Date(baseTime.getTime() + HOURS_PER_COIN * 60 * 60 * 1000);
+
     const [updated] = await prisma.$transaction([
       prisma.rewardUser.update({
         where: { id: user.id },
-        data: { coins: { increment: 1 } },
+        data: { coins: { increment: 1 }, accessUntil: newAccessUntil },
       }),
       prisma.videoView.create({
         data: { userId: user.id, adUnitId: adUnitId || null },

@@ -373,20 +373,13 @@ app.post('/api/auth/redeem-code', async (req, res) => {
     }
 
     const now = new Date();
-    let accessUntil = user.accessUntil;
-    let updatedCoins = user.coins;
+    const accessUntil = user.accessUntil;
 
+    // Hours start counting the moment coins are earned (in the rewards app).
+    // Here we just verify the timer is still running.
     if (!accessUntil || accessUntil <= now) {
-      if (user.coins <= 0) {
-        res.status(402).json({ error: 'Sem moedas. Assista vídeos no app para ganhar tempo.' });
-        return;
-      }
-      accessUntil = new Date(now.getTime() + HOURS_PER_COIN * 60 * 60 * 1000);
-      const updated = await prisma.rewardUser.update({
-        where: { id: user.id },
-        data: { coins: { decrement: 1 }, accessUntil },
-      });
-      updatedCoins = updated.coins;
+      res.status(402).json({ error: 'Sem tempo de acesso. Assista vídeos no app Krator Rewards para ganhar horas.' });
+      return;
     }
 
     // Ensure synthetic AppUser exists for this reward user
@@ -428,7 +421,7 @@ app.post('/api/auth/redeem-code', async (req, res) => {
       userId: appUserId,
       sessionId: result.sessionId,
       code: user.code,
-      coins: updatedCoins,
+      coins: user.coins,
       accessUntil: accessUntil.toISOString(),
     });
   } catch (err: any) {
