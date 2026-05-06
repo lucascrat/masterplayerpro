@@ -1,3 +1,4 @@
+// Build Trigger: Cloudflare Pages Deployment - v1.1.2-stable
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import { useClock } from './hooks/useClock';
