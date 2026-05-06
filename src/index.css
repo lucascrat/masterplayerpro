@@ -2181,3 +2181,30 @@ h1, h2, h3, h4 {
   font-size: 0.75rem;
   color: #555;
 }
+/* Playlist Loading Overlay */
+.playlist-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  color: white;
+  animation: fadeIn 0.3s ease;
+}
+
+.playlist-loading-overlay p {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

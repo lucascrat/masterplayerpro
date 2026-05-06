@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
-import { generateMAC } from './utils';
+import { generateMAC, parseM3UFromUrl } from './utils';
 
 // Pages
 import LoginScreen from './pages/client/LoginScreen';
@@ -23,6 +23,7 @@ export default function App() {
   const clock = useClock();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
+  const [playlistLoading, setPlaylistLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('login');
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -30,6 +31,23 @@ export default function App() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
 
   const deviceId = generateMAC();
+
+  // Busca e parseia o arquivo M3U da URL fornecida
+  const loadPlaylist = useCallback(async (url: string) => {
+    setPlaylistLoading(true);
+    try {
+      const items = await parseM3UFromUrl(url);
+      setPlaylist({
+        live:   items.filter(i => i.type === 'live'),
+        movies: items.filter(i => i.type === 'movie'),
+        series: items.filter(i => i.type === 'series'),
+      });
+    } catch (err) {
+      console.error('Erro ao carregar playlist:', err);
+    } finally {
+      setPlaylistLoading(false);
+    }
+  }, []);
 
   const doLogin = async (username: string, password: string, existingSessionId?: string): Promise<boolean> => {
     setLoginLoading(true);
@@ -133,17 +151,14 @@ export default function App() {
         .replace(/username=[^&]*/i, `username=${credential.username}`)
         .replace(/password=[^&]*/i, `password=${credential.password}`);
 
-      const finalPlaylist: PlaylistData = {
-        id: credential.playlist_id,
-        name: playlistName,
-        url: finalUrl,
-      };
-
       setSession(auth);
-      setPlaylist(finalPlaylist);
-      localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+      // Salvar URL para poder recarregar depois
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ ...auth, _playlistUrl: finalUrl }));
       setLoginError(null);
       setCurrentPage('home');
+
+      // Carregar conteúdo da playlist em background
+      loadPlaylist(finalUrl);
       return true;
 
     } catch (err: any) {
@@ -178,28 +193,23 @@ export default function App() {
     const saved = localStorage.getItem(AUTH_KEY);
     if (saved) {
       try {
-        const auth: AuthSession = JSON.parse(saved);
-        
-        // Se temos uma sessão salva, vamos para a Home IMEDIATAMENTE 
-        // para evitar a tela preta de "loading". A validação acontece em paralelo.
-        setSession(auth);
+        const stored = JSON.parse(saved);
+        const { _playlistUrl, ...auth } = stored;
+
+        // Vai para Home imediatamente, sem tela de loading
+        setSession(auth as AuthSession);
         setCurrentPage('home');
 
-        if (auth.rewardCode && auth.accessUntil) {
-          if (new Date(auth.accessUntil) <= new Date()) {
-            logout();
-            return;
-          }
-          doCodeLogin(auth.rewardCode, auth.sessionId);
-        } else {
-          // Re-validar login e carregar playlist em background
-          doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
-            if (!ok) {
-              // Se a validação falhar (ex: usuário excluído), aí sim desloga
-              logout();
-            }
-          });
+        // Recarregar playlist salva em paralelo
+        if (_playlistUrl) {
+          loadPlaylist(_playlistUrl);
         }
+
+        // Re-validar sessão em background (sem bloquear a UI)
+        doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
+          if (!ok) logout();
+        });
+
       } catch (e) {
         localStorage.removeItem(AUTH_KEY);
         setCurrentPage('login');
@@ -358,12 +368,24 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {playlistLoading && (
+        <div className="playlist-loading-overlay">
+          <div className="spinner" />
+          <p>Atualizando conteúdo...</p>
+        </div>
+      )}
+
       {currentPage === 'login' && (
         <LoginScreen onLogin={doLogin} onLoginWithCode={doCodeLogin} error={loginError} loading={loginLoading} />
       )}
 
       {currentPage === 'home' && (
-        <HomePage clock={clock} mac={session?.username || ''} device={null} onNavigate={setCurrentPage} />
+        <HomePage 
+          clock={clock} 
+          mac={session?.username || ''} 
+          playlistName={session?.playlistName || ''} 
+          onNavigate={setCurrentPage} 
+        />
       )}
 
       {currentPage === 'livetv' && (

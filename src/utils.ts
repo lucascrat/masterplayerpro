@@ -63,3 +63,67 @@ export function generateMAC(): string {
   localStorage.setItem('masterplayer_mac', mac);
   return mac;
 }
+
+// ============================================================
+// M3U Parser — fetches and parses a remote M3U/M3U+ playlist
+// ============================================================
+function classifyType(group: string, name: string): 'live' | 'movie' | 'series' {
+  const g = group.toLowerCase();
+  const n = name.toLowerCase();
+
+  // Series detection: has SxxExx or "temporada" or "season"
+  if (/s\d{1,2}\s*[xe]\d{1,2}/i.test(n) || /temporada|season/i.test(g)) return 'series';
+
+  // Movie indicators
+  if (/filme|movie|filmes|movies|cinema|vod/i.test(g)) return 'movie';
+
+  // Series indicators
+  if (/série|series|seri[e]|novela|soap/i.test(g)) return 'series';
+
+  // Default to live for channels
+  return 'live';
+}
+
+export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
+  // Try direct fetch first; fall back to a CORS proxy if needed
+  let text = '';
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    text = await res.text();
+  } catch {
+    // CORS proxy fallback
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { cache: 'no-store' });
+    text = await res.text();
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const items: M3UItem[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('#EXTINF')) continue;
+
+    const info = lines[i];
+    const streamUrl = lines[i + 1] || '';
+    if (!streamUrl || streamUrl.startsWith('#')) continue;
+
+    // Extract tvg-logo
+    const logoMatch = info.match(/tvg-logo="([^"]*)"/i);
+    const logo = logoMatch ? logoMatch[1] : '';
+
+    // Extract group-title
+    const groupMatch = info.match(/group-title="([^"]*)"/i);
+    const group = groupMatch ? groupMatch[1] : 'Sem Categoria';
+
+    // Extract name (after the last comma)
+    const commaIdx = info.lastIndexOf(',');
+    const name = commaIdx >= 0 ? info.slice(commaIdx + 1).trim() : 'Sem Nome';
+
+    const type = classifyType(group, name);
+    items.push({ name, logo, group, url: streamUrl, type });
+    i++; // skip the stream URL line
+  }
+
+  return items;
+}

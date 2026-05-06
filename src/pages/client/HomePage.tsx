@@ -5,11 +5,11 @@ import InstallBanner from '../../components/InstallBanner';
 interface HomePageProps {
   clock: string;
   mac: string;
-  device: DeviceInfo | null;
+  playlistName: string;
   onNavigate: (page: Page) => void;
 }
 
-export default function HomePage({ clock, mac, device, onNavigate }: HomePageProps) {
+export default function HomePage({ clock, mac, playlistName, onNavigate }: HomePageProps) {
   const menuItems = [
     { label: 'TV ao Vivo', icon: '📺', page: 'livetv' as Page },
     { label: 'Filmes', icon: '🎬', page: 'movies' as Page },
@@ -25,10 +25,10 @@ export default function HomePage({ clock, mac, device, onNavigate }: HomePagePro
       <div className="top-bar">
         <div className="time">{clock}</div>
         <div className="playlist-info">
-          {device?.playlist ? (
-            <>Playlist: <span>{device.playlist.name}</span></>
+          {playlistName ? (
+            <>Playlist: <span>{playlistName}</span></>
           ) : (
-            <span style={{ color: '#999' }}>Sem playlist</span>
+            <span style={{ color: '#999' }}>Carregando...</span>
           )}
         </div>
       </div>
