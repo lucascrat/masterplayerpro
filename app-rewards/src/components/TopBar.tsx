@@ -15,8 +15,8 @@ export default function TopBar() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40 bg-[#0B0120]/90 backdrop-blur-xl border-b border-primary-container/20 shadow-[0_0_15px_rgba(168,85,247,0.12)]"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      className="fixed left-0 right-0 z-40 bg-[#0B0120]/90 backdrop-blur-xl border-b border-primary-container/20 shadow-[0_0_15px_rgba(168,85,247,0.12)]"
+      style={{ top: 'calc(60px + env(safe-area-inset-top))' }}
     >
       <div className="max-w-xl mx-auto flex justify-between items-center px-5 h-16 relative">
         {/* Logo */}

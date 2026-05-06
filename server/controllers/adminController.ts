@@ -139,7 +139,8 @@ export const createAppUser = async (req: Request, res: Response) => {
     return;
   }
   try {
-    const user = await prisma.appUser.create({ data: { username, password, name: name || null } });
+    const normalizedUsername = username.trim().toLowerCase();
+    const user = await prisma.appUser.create({ data: { username: normalizedUsername, password, name: name || null } });
     res.json(user);
   } catch (err: any) {
     if (err.code === 'P2002') {
@@ -154,7 +155,7 @@ export const updateAppUser = async (req: Request, res: Response) => {
   const id = String(req.params['id']);
   const { username, password, name, isActive } = req.body;
   const data: any = {};
-  if (username !== undefined) data.username = username;
+  if (username !== undefined) data.username = username.trim().toLowerCase();
   if (password !== undefined) data.password = password;
   if (name !== undefined) data.name = name;
   if (isActive !== undefined) data.isActive = isActive;

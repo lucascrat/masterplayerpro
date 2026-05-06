@@ -1,8 +1,10 @@
+// dotenv/config side-effect import MUST come before any module that reads process.env.DATABASE_URL
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import axios from 'axios';
 import crypto from 'crypto';
 
@@ -13,8 +15,6 @@ import rewardsRoutes, { HOURS_PER_COIN } from './routes/rewardsRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
 import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
 import prisma from './db';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,6 +105,17 @@ app.use(express.json());
       )
     `);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ad_nonces_user_created_idx ON ad_nonces("userId", "createdAt")`);
+    // Backfill accessUntil for legacy reward users created before timer-on-earn:
+    // each coin represents 2h of access counted from now.
+    await prisma.$executeRawUnsafe(`
+      UPDATE reward_users
+      SET "accessUntil" = NOW() + (coins * INTERVAL '2 hours')
+      WHERE "accessUntil" IS NULL AND coins > 0
+    `);
+
+    // Backfill: Normalize all app_users usernames to lowercase
+    await prisma.$executeRawUnsafe(`UPDATE app_users SET username = LOWER(TRIM(username))`);
+    
     console.log('[DB] All tables ready');
   } catch (e: any) {
     console.log('[DB] Migration note:', e.message);
@@ -280,11 +291,12 @@ app.post('/api/tmdb/posters', async (req, res) => {
 // and returns playlist with URLs rewritten for the assigned credential.
 // Falls back to direct IPTV validation for backwards compatibility.
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password, sessionId: clientSessionId } = req.body;
-  if (!username || !password) {
+  const { username: rawUsername, password, sessionId: clientSessionId } = req.body;
+  if (!rawUsername || !password) {
     res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
     return;
   }
+  const username = rawUsername.trim().toLowerCase();
   try {
     // 1. Try AppUser authentication (new pool system)
     const appUser = await prisma.appUser.findUnique({ where: { username } });
@@ -529,8 +541,8 @@ app.get('/{*path}', (_req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Krator+ Server running on port ${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 Krator+ Server running on port ${PORT} (0.0.0.0)`);
 
   // Preload all playlists into memory so first login is instant
   preloadAllPlaylists();

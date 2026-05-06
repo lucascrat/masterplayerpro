@@ -21,7 +21,7 @@ export default function LoginScreen({ onLogin, onLoginWithCode, error, loading }
     e.preventDefault();
     if (mode === 'password') {
       if (!username.trim() || !password.trim()) return;
-      await onLogin(username.trim(), password.trim());
+      await onLogin(username.trim().toLowerCase(), password.trim());
     } else {
       if (!code.trim()) return;
       await onLoginWithCode(code.trim().toUpperCase());

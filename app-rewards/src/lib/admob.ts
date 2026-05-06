@@ -46,7 +46,7 @@ export async function showBanner() {
   const options: BannerAdOptions = {
     adId: AD_UNITS.banner,
     adSize: BannerAdSize.ADAPTIVE_BANNER,
-    position: BannerAdPosition.BOTTOM_CENTER,
+    position: BannerAdPosition.TOP_CENTER,
     margin: 0,
     isTesting: false,
   };

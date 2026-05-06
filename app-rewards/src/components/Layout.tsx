@@ -16,7 +16,13 @@ const NAV = [
 export default function Layout({ children }: Props) {
   const loc = useLocation();
   return (
-    <div className="min-h-screen bg-surface" style={{ paddingBottom: 'calc(80px + 60px + env(safe-area-inset-bottom))' }}>
+    <div
+      className="min-h-screen bg-surface"
+      style={{
+        paddingTop: 'calc(60px + env(safe-area-inset-top))',
+        paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
+      }}
+    >
       <TopBar />
       <main className="pt-20 px-5 max-w-xl mx-auto">{children}</main>
 
@@ -25,9 +31,6 @@ export default function Layout({ children }: Props) {
         className="fixed bottom-0 left-0 right-0 z-50"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        {/* Ad banner space — 60px placeholder so nav sits above it */}
-        <div style={{ height: 60 }} />
-
         <div className="bg-[#0B0120]/95 backdrop-blur-2xl border-t border-primary-container/25 shadow-[0_-8px_30px_rgba(13,1,24,0.9)]">
           <div className="max-w-xl mx-auto flex justify-around items-center px-2 py-2">
             {NAV.map((item) => {
