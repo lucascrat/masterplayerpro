@@ -6,6 +6,7 @@ interface AppUser {
   password: string;
   name: string | null;
   isActive: boolean;
+  playlist_id: string | null;
   leases: { credential: { username: string; playlist: { name: string } } }[];
 }
 
@@ -28,7 +29,7 @@ interface AdminUsersProps {
   appUsers: AppUser[];
   iptvCredentials: IptvCredential[];
   playlists: Playlist[];
-  onCreateUser: (data: { username: string; password: string; name?: string }) => void;
+  onCreateUser: (data: { username: string; password: string; name?: string; playlistId?: string }) => void;
   onUpdateUser: (id: string, data: any) => void;
   onDeleteUser: (id: string) => void;
   onCreateCredential: (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) => void;
@@ -42,13 +43,16 @@ export default function AdminUsers({
 }: AdminUsersProps) {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showCredForm, setShowCredForm] = useState(false);
-   const [newUser, setNewUser] = useState({ username: '', password: '', name: '' });
+  const [newUser, setNewUser] = useState({ username: '', password: '', name: '', playlistId: '' });
   const [newCred, setNewCred] = useState({ username: '', password: '', playlistId: '', serverUrl: '', maxLeases: '2' });
 
   const handleCreateUser = () => {
-    if (!newUser.username || !newUser.password) return;
-    onCreateUser({ username: newUser.username, password: newUser.password, name: newUser.name || undefined });
-    setNewUser({ username: '', password: '', name: '' });
+    if (!newUser.username || !newUser.password || !newUser.playlistId) {
+      alert('Preencha usuário, senha e selecione uma playlist.');
+      return;
+    }
+    onCreateUser({ username: newUser.username, password: newUser.password, name: newUser.name || undefined, playlistId: newUser.playlistId });
+    setNewUser({ username: '', password: '', name: '', playlistId: '' });
     setShowUserForm(false);
   };
 
@@ -97,6 +101,13 @@ export default function AdminUsers({
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Nome (opcional)</label>
               <input className="admin-input" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} placeholder="Maria Silva" />
             </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Playlist ⚠️</label>
+              <select className="admin-select" value={newUser.playlistId} onChange={e => setNewUser({ ...newUser, playlistId: e.target.value })}>
+                <option value="">Selecione a lista...</option>
+                {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
             <button className="admin-btn-primary" onClick={handleCreateUser} style={{ height: 40 }}>Salvar</button>
             <button className="admin-btn-secondary" onClick={() => setShowUserForm(false)} style={{ height: 40 }}>Cancelar</button>
           </div>
@@ -110,6 +121,7 @@ export default function AdminUsers({
               <th>Usuario</th>
               <th>Nome</th>
               <th>Senha</th>
+              <th>Playlist</th>
               <th>Status</th>
               <th>Usando</th>
               <th style={{ textAlign: 'right' }}>Acoes</th>
@@ -117,12 +129,15 @@ export default function AdminUsers({
           </thead>
           <tbody>
             {appUsers.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: '#555', padding: '2rem' }}>Nenhum usuario cadastrado</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: '#555', padding: '2rem' }}>Nenhum usuario cadastrado</td></tr>
             ) : appUsers.map(u => (
               <tr key={u.id}>
                 <td><span style={{ fontWeight: 600, color: '#e5e5e5' }}>{u.username}</span></td>
                 <td>{u.name || <span style={{ color: '#555' }}>-</span>}</td>
                 <td><span style={{ fontFamily: 'monospace', color: '#888' }}>{u.password}</span></td>
+                <td>
+                  {playlists.find(p => p.id === u.playlist_id)?.name || <span style={{ color: '#f59e0b', fontSize: '0.78rem' }}>⚠️ Sem lista</span>}
+                </td>
                 <td>
                   <span
                     className={`admin-badge ${u.isActive ? 'active' : 'inactive'}`}

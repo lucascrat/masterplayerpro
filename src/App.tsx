@@ -36,10 +36,10 @@ export default function App() {
     try {
       const userLower = username.trim().toLowerCase();
       
-      // 1. Validar Usuário
+      // 1. Validar Usuário e buscar playlist vinculada diretamente
       const { data: appUser, error: uError } = await supabase
         .from('app_users')
-        .select('*')
+        .select('*, playlists(*)')
         .eq('username', userLower)
         .eq('password', password)
         .single();
@@ -54,29 +54,16 @@ export default function App() {
         return false;
       }
 
-      // 2. Buscar Playlist vinculada a este Dispositivo (MAC)
-      const { data: device, error: dError } = await supabase
-        .from('devices')
-        .select('*, playlists(*)')
-        .eq('mac_address', deviceId)
-        .single();
-
-      if (dError || !device || !device.playlists) {
-        setLoginError('Dispositivo não autorizado ou sem lista vinculada.');
+      if (!appUser.playlists) {
+        setLoginError('Nenhuma lista vinculada à sua conta. Contate o administrador.');
         return false;
       }
 
-      if (!device.is_active) {
-        setLoginError('Dispositivo bloqueado pelo administrador.');
-        return false;
-      }
-
-      // 3. Gerenciamento de Sessão/Pool (Simplificado para Supabase Direto)
+      // 2. Gerenciamento de Sessão/Pool
       let sessionId = existingSessionId;
-      let credential = null;
+      let credential: any = null;
 
       if (sessionId) {
-        // Tentar reaproveitar lease existente
         const { data: existingLease } = await supabase
           .from('credential_leases')
           .select('*, iptv_credentials(*)')
@@ -86,27 +73,24 @@ export default function App() {
         if (existingLease && existingLease.iptv_credentials) {
           credential = existingLease.iptv_credentials;
         } else {
-          sessionId = undefined; // Se não existe mais, limpa para criar nova
+          sessionId = undefined;
         }
       }
 
       if (!sessionId) {
-        // Buscar credencial disponível no pool desta playlist
-        // (Buscamos credenciais ativas da playlist que não excederam max_leases)
         const { data: creds } = await supabase
           .from('iptv_credentials')
           .select('*, credential_leases(id)')
-          .eq('playlist_id', device.playlists.id)
+          .eq('playlist_id', (appUser.playlists as any).id)
           .eq('is_active', true);
 
-        const availableCred = creds?.find(c => (c.credential_leases?.length || 0) < c.max_leases);
+        const availableCred = (creds as any[])?.find(c => (c.credential_leases?.length || 0) < c.max_leases);
 
         if (!availableCred) {
           setLoginError('Limite de conexões atingido para esta lista.');
           return false;
         }
 
-        // Criar novo Lease
         const { data: newLease, error: lError } = await supabase
           .from('credential_leases')
           .insert([{
@@ -119,31 +103,33 @@ export default function App() {
 
         if (lError || !newLease) throw new Error('Erro ao criar sessão');
         
-        sessionId = newLease.session_id;
+        sessionId = (newLease as any).session_id;
         credential = availableCred;
       }
 
-      // 4. Montar Sessão Final
+      // 3. Montar Sessão Final
+      const pl = appUser.playlists as any;
       const auth: AuthSession = { 
         username, 
         password, 
-        playlistName: device.playlists.name, 
+        playlistName: pl.name, 
         userId: appUser.id, 
         sessionId 
       };
 
       // Injetar credenciais na URL da playlist para o player
       const finalPlaylist: PlaylistData = {
-        ...device.playlists,
-        url: device.playlists.url
-          .replace('username=', `username=${credential.username}`)
-          .replace('password=', `password=${credential.password}`)
+        ...pl,
+        url: pl.url
+          .replace(/username=[^&]*/i, `username=${credential.username}`)
+          .replace(/password=[^&]*/i, `password=${credential.password}`)
       };
 
       setSession(auth);
       setPlaylist(finalPlaylist);
       localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
       setLoginError(null);
+      setCurrentPage('home');
       return true;
 
     } catch (err: any) {
@@ -154,6 +140,7 @@ export default function App() {
       setLoginLoading(false);
     }
   };
+
 
   const doCodeLogin = async (code: string, existingSessionId?: string): Promise<boolean> => {
     // Sistema de recompensas/código será migrado para Supabase em breve

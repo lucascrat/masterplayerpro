@@ -77,6 +77,7 @@ export default function Admin() {
         password: u.password,
         name: u.name,
         isActive: u.is_active,
+        playlist_id: u.playlist_id,
         createdAt: u.created_at,
         leases: (u.credential_leases || []).map((l: any) => ({
           credential: {
@@ -241,12 +242,13 @@ export default function Admin() {
   };
 
   // App Users CRUD
-  const createAppUser = async (data: { username: string; password: string; name?: string }) => {
+  const createAppUser = async (data: { username: string; password: string; name?: string; playlistId?: string }) => {
     try {
       const { error } = await supabase.from('app_users').insert([{
         username: data.username.trim().toLowerCase(),
         password: data.password,
         name: data.name,
+        playlist_id: data.playlistId || null,
         is_active: true
       }]);
       if (error) throw error;
@@ -263,6 +265,7 @@ export default function Admin() {
       if (data.password !== undefined) payload.password = data.password;
       if (data.name !== undefined) payload.name = data.name;
       if (data.isActive !== undefined) payload.is_active = data.isActive;
+      if (data.playlistId !== undefined) payload.playlist_id = data.playlistId || null;
 
       await supabase.from('app_users').update(payload).eq('id', id);
       fetchAll();
