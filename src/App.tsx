@@ -35,11 +35,11 @@ export default function App() {
     setLoginLoading(true);
     try {
       const userLower = username.trim().toLowerCase();
-      
-      // 1. Validar Usuário e buscar playlist vinculada diretamente
+
+      // 1. Validar Usuário
       const { data: appUser, error: uError } = await supabase
         .from('app_users')
-        .select('*, playlists(*)')
+        .select('id, username, is_active')
         .eq('username', userLower)
         .eq('password', password)
         .single();
@@ -48,49 +48,60 @@ export default function App() {
         setLoginError('Usuário ou senha incorretos');
         return false;
       }
-
       if (!appUser.is_active) {
         setLoginError('Conta desativada. Contate o administrador.');
         return false;
       }
 
-      if (!appUser.playlists) {
-        setLoginError('Nenhuma lista vinculada à sua conta. Contate o administrador.');
-        return false;
-      }
-
-      // 2. Gerenciamento de Sessão/Pool
+      // 2. Reutilizar sessão existente (restauração de sessão)
       let sessionId = existingSessionId;
       let credential: any = null;
+      let playlistUrl = '';
+      let playlistName = '';
 
       if (sessionId) {
         const { data: existingLease } = await supabase
           .from('credential_leases')
-          .select('*, iptv_credentials(*)')
+          .select('session_id, iptv_credentials(*, playlists(*))')
           .eq('session_id', sessionId)
           .single();
-        
-        if (existingLease && existingLease.iptv_credentials) {
+
+        if (existingLease?.iptv_credentials) {
           credential = existingLease.iptv_credentials;
+          playlistUrl = (credential.playlists as any)?.url || '';
+          playlistName = (credential.playlists as any)?.name || '';
         } else {
-          sessionId = undefined;
+          sessionId = undefined; // Sessão expirou, criar nova
         }
       }
 
       if (!sessionId) {
-        const { data: creds } = await supabase
+        // 3. Limpar leases expirados (ociosos há mais de 10 min)
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        await supabase
+          .from('credential_leases')
+          .delete()
+          .lt('last_activity', tenMinutesAgo)
+          .eq('is_watching', false);
+
+        // 4. Buscar credencial disponível do pool global
+        const { data: creds, error: cError } = await supabase
           .from('iptv_credentials')
-          .select('*, credential_leases(id)')
-          .eq('playlist_id', (appUser.playlists as any).id)
+          .select('*, playlists(*), credential_leases(id)')
           .eq('is_active', true);
 
-        const availableCred = (creds as any[])?.find(c => (c.credential_leases?.length || 0) < c.max_leases);
+        if (cError) throw cError;
+
+        const availableCred = (creds as any[])?.find(
+          c => (c.credential_leases?.length || 0) < (c.max_leases || 2)
+        );
 
         if (!availableCred) {
-          setLoginError('Limite de conexões atingido para esta lista.');
+          setLoginError('Serviço lotado no momento. Tente novamente em alguns minutos.');
           return false;
         }
 
+        // 5. Criar Lease (reservar credencial para este usuário)
         const { data: newLease, error: lError } = await supabase
           .from('credential_leases')
           .insert([{
@@ -98,31 +109,34 @@ export default function App() {
             credential_id: availableCred.id,
             is_watching: false
           }])
-          .select()
+          .select('session_id')
           .single();
 
-        if (lError || !newLease) throw new Error('Erro ao criar sessão');
-        
+        if (lError || !newLease) throw new Error('Erro ao reservar credencial');
+
         sessionId = (newLease as any).session_id;
         credential = availableCred;
+        playlistUrl = (availableCred.playlists as any)?.url || '';
+        playlistName = (availableCred.playlists as any)?.name || '';
       }
 
-      // 3. Montar Sessão Final
-      const pl = appUser.playlists as any;
-      const auth: AuthSession = { 
-        username, 
-        password, 
-        playlistName: pl.name, 
-        userId: appUser.id, 
-        sessionId 
+      // 6. Montar sessão e injetar credenciais na URL
+      const auth: AuthSession = {
+        username: appUser.username,
+        password,
+        playlistName,
+        userId: appUser.id,
+        sessionId
       };
 
-      // Injetar credenciais na URL da playlist para o player
+      const finalUrl = playlistUrl
+        .replace(/username=[^&]*/i, `username=${credential.username}`)
+        .replace(/password=[^&]*/i, `password=${credential.password}`);
+
       const finalPlaylist: PlaylistData = {
-        ...pl,
-        url: pl.url
-          .replace(/username=[^&]*/i, `username=${credential.username}`)
-          .replace(/password=[^&]*/i, `password=${credential.password}`)
+        id: credential.playlist_id,
+        name: playlistName,
+        url: finalUrl,
       };
 
       setSession(auth);

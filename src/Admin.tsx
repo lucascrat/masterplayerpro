@@ -242,13 +242,12 @@ export default function Admin() {
   };
 
   // App Users CRUD
-  const createAppUser = async (data: { username: string; password: string; name?: string; playlistId?: string }) => {
+  const createAppUser = async (data: { username: string; password: string; name?: string }) => {
     try {
       const { error } = await supabase.from('app_users').insert([{
         username: data.username.trim().toLowerCase(),
         password: data.password,
         name: data.name,
-        playlist_id: data.playlistId || null,
         is_active: true
       }]);
       if (error) throw error;
