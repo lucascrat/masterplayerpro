@@ -282,9 +282,13 @@ async function validateAgainstServer(config: RefConfig, user: string, pass: stri
         if (!resolved) { resolved = true; res.data.destroy(); resolve(val); }
       };
 
+      let buffer = '';
       res.data.on('data', (chunk: Buffer) => {
-        const text = chunk.toString('utf-8', 0, Math.min(chunk.length, 200));
-        done(text.includes('#EXTM3U'));
+        buffer += chunk.toString('utf-8');
+        // Check if we have enough data to identify an M3U file
+        if (buffer.length >= 7) {
+          done(buffer.trim().startsWith('#EXTM3U'));
+        }
       });
 
       res.data.on('error', () => done(false));
@@ -474,8 +478,10 @@ function buildFetchUrl(config: RefConfig): string {
   try {
     const parsedUrl = new URL(config.url);
     if (parsedUrl.searchParams.has('username')) {
-      // Always force m3u8 output — browser player needs HLS
-      parsedUrl.searchParams.set('output', 'm3u8');
+      // Respect original output format if provided (some servers 404 on m3u8)
+      if (!parsedUrl.searchParams.has('output')) {
+        parsedUrl.searchParams.set('output', 'm3u8');
+      }
       if (!parsedUrl.searchParams.has('type')) {
         parsedUrl.searchParams.set('type', 'm3u_plus');
       }
