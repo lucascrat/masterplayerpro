@@ -29,7 +29,7 @@ export default function Admin() {
   // Restore session on mount
   useEffect(() => {
     const saved = localStorage.getItem(ADMIN_SESSION_KEY);
-    if (saved === 'master2024') {
+    if (saved === 'active') {
       setIsLoggedIn(true);
     }
   }, []);
@@ -109,13 +109,25 @@ export default function Admin() {
     if (isLoggedIn) fetchAll();
   }, [isLoggedIn]);
 
-  const handleLogin = (pass: string) => {
-    if (pass === 'master2024') {
-      localStorage.setItem(ADMIN_SESSION_KEY, 'master2024');
+  const handleLogin = async (user: string, pass: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('username', user)
+        .eq('password', pass)
+        .single();
+
+      if (error || !data) {
+        setLoginError('Usuário ou senha inválidos');
+        return;
+      }
+
+      localStorage.setItem(ADMIN_SESSION_KEY, 'active');
       setIsLoggedIn(true);
       setLoginError(null);
-    } else {
-      setLoginError('Chave de administrador inválida');
+    } catch (err) {
+      setLoginError('Erro ao conectar com o banco de dados');
     }
   };
 
