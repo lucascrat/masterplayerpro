@@ -33,3 +33,6 @@ dist-ssr
 # Android secrets
 *.jks
 keystore.properties
+
+# Temporary files
+scratch/
