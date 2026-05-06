@@ -213,7 +213,7 @@ export default function Admin() {
   const createAppUser = async (data: { username: string; password: string; name?: string }) => {
     try {
       const { error } = await supabase.from('app_users').insert([{
-        username: data.username,
+        username: data.username.trim().toLowerCase(),
         password: data.password,
         name: data.name,
         is_active: true
@@ -228,7 +228,7 @@ export default function Admin() {
   const updateAppUser = async (id: string, data: any) => {
     try {
       const payload: any = {};
-      if (data.username !== undefined) payload.username = data.username;
+      if (data.username !== undefined) payload.username = data.username.trim().toLowerCase();
       if (data.password !== undefined) payload.password = data.password;
       if (data.name !== undefined) payload.name = data.name;
       if (data.isActive !== undefined) payload.is_active = data.isActive;
