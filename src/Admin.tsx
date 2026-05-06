@@ -43,19 +43,20 @@ export default function Admin() {
         { data: uData },
         { data: cData }
       ] = await Promise.all([
-        supabase.from('devices').select('*').order('created_at', { ascending: false }),
+        supabase.from('devices').select('*, playlists(*)').order('created_at', { ascending: false }),
         supabase.from('playlists').select('*').order('created_at', { ascending: false }),
-        supabase.from('app_users').select('*').order('created_at', { ascending: false }),
-        supabase.from('iptv_credentials').select('*').order('created_at', { ascending: false }),
+        supabase.from('app_users').select('*, credential_leases(*, iptv_credentials(*, playlists(*)))').order('created_at', { ascending: false }),
+        supabase.from('iptv_credentials').select('*, playlists(*), credential_leases(*, app_users(*))').order('created_at', { ascending: false }),
       ]);
 
-      // Map snake_case to camelCase
+      // Map snake_case to camelCase and handle relations
       setDevices((dData || []).map((d: any) => ({
         id: d.id,
         macAddress: d.mac_address,
         name: d.name,
         isActive: d.is_active,
         playlistId: d.playlist_id,
+        playlist: d.playlists ? { id: d.playlists.id, name: d.playlists.name } : null,
         createdAt: d.created_at
       })));
 
@@ -76,7 +77,13 @@ export default function Admin() {
         password: u.password,
         name: u.name,
         isActive: u.is_active,
-        createdAt: u.created_at
+        createdAt: u.created_at,
+        leases: (u.credential_leases || []).map((l: any) => ({
+          credential: {
+            username: l.iptv_credentials?.username,
+            playlist: { name: l.iptv_credentials?.playlists?.name || 'Sem Nome' }
+          }
+        }))
       })));
 
       setIptvCredentials((cData || []).map((c: any) => ({
@@ -84,9 +91,13 @@ export default function Admin() {
         username: c.username,
         password: c.password,
         playlistId: c.playlist_id,
+        playlist: c.playlists ? { id: c.playlists.id, name: c.playlists.name } : { id: '', name: 'Sem Playlist' },
         maxLeases: c.max_leases,
         isActive: c.is_active,
-        createdAt: c.created_at
+        createdAt: c.created_at,
+        leases: (c.credential_leases || []).map((l: any) => ({
+          appUser: { id: l.app_users?.id, username: l.app_users?.username }
+        }))
       })));
 
     } catch (err) {
