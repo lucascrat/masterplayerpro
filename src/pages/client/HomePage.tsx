@@ -47,7 +47,7 @@ export default function HomePage({ clock, mac, playlistName, onNavigate }: HomeP
       </div>
 
       <div style={{ position: 'absolute', bottom: '1.5rem', color: '#444', fontSize: '0.75rem' }}>
-        {mac} | Krator+ v1.2-debug
+        {mac} | Krator+ v1.3-debug
       </div>
 
       <InstallBanner />

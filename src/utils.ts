@@ -93,16 +93,23 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     text = await res.text();
   } catch (e) {
-    console.warn('Direct fetch failed, trying proxy...', e);
-    // CORS proxy fallback
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`O servidor IPTV recusou a conexão (Erro ${res.status}).`);
-    text = await res.text();
+    console.warn('Direct fetch failed, trying proxy 1 (allorigins)...', e);
+    try {
+      const proxy1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const res1 = await fetch(proxy1, { cache: 'no-store' });
+      if (!res1.ok) throw new Error(`Proxy 1 falhou: ${res1.status}`);
+      text = await res1.text();
+    } catch (e2) {
+      console.warn('Proxy 1 failed, trying proxy 2 (backup)...', e2);
+      const proxy2 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res2 = await fetch(proxy2, { cache: 'no-store' });
+      const data2 = await res2.json();
+      text = data2.contents || '';
+    }
   }
 
   if (!text || text.trim().length === 0) {
-    throw new Error('A lista está vazia ou o servidor IPTV não retornou dados.');
+    throw new Error('Não foi possível baixar a lista (Servidor IPTV inacessível ou bloqueado).');
   }
 
   if (!text || !text.includes('#EXTM3U')) {
