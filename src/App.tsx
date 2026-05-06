@@ -100,8 +100,13 @@ export default function App() {
 
         if (existingLease?.iptv_credentials) {
           credential = existingLease.iptv_credentials;
-          playlistUrl = (credential as any).playlists?.url || '';
-          playlistName = (credential as any).playlists?.name || '';
+          
+          const playlistObj = Array.isArray((credential as any).playlists)
+            ? (credential as any).playlists[0]
+            : (credential as any).playlists;
+
+          playlistUrl = playlistObj?.url || '';
+          playlistName = playlistObj?.name || '';
           console.log('Sessão restaurada. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
         } else {
           sessionId = undefined; // Sessão expirou, criar nova
@@ -149,9 +154,20 @@ export default function App() {
 
         sessionId = (newLease as any).session_id;
         credential = availableCred;
-        playlistUrl = (availableCred as any).playlists?.url || '';
-        playlistName = (availableCred as any).playlists?.name || '';
+        
+        // Suporte robusto para relação Supabase (pode vir como objeto ou array de 1 item)
+        const playlistObj = Array.isArray((availableCred as any).playlists) 
+          ? (availableCred as any).playlists[0] 
+          : (availableCred as any).playlists;
+
+        playlistUrl = playlistObj?.url || '';
+        playlistName = playlistObj?.name || '';
+        
         console.log('Nova sessão. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
+
+        if (!playlistUrl) {
+          throw new Error('A credencial selecionada não possui uma playlist vinculada.');
+        }
       }
 
       // 6. Montar sessão e injetar credenciais na URL
