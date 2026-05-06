@@ -85,64 +85,122 @@ function classifyType(group: string, name: string): 'live' | 'movie' | 'series' 
 }
 
 export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
-  // Try direct fetch first; fall back to a CORS proxy if needed
+  const startTime = Date.now();
   let text = '';
-  try {
-    console.log('Fetching M3U:', url.split('?')[0] + '?...'); // Log obfuscated URL
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    text = await res.text();
-  } catch (e) {
-    console.warn('Direct fetch failed, trying proxy 1 (allorigins)...', e);
+  let errorDetail = '';
+
+  const fetchMethods = [
+    // Método 1: Fetch Direto (mais rápido, mas pode falhar por CORS)
+    async () => {
+      console.log('Tentando Fetch Direto...');
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    },
+    // Método 2: Proxy AllOrigins (Raw)
+    async () => {
+      console.log('Tentando Proxy 1 (AllOrigins Raw)...');
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Proxy 1 falhou: ${res.status}`);
+      return await res.text();
+    },
+    // Método 3: Proxy CorsProxy.io
+    async () => {
+      console.log('Tentando Proxy 2 (CorsProxy.io)...');
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Proxy 2 falhou: ${res.status}`);
+      return await res.text();
+    },
+    // Método 4: Proxy AllOrigins (Get - JSON Wrapper)
+    async () => {
+      console.log('Tentando Proxy 3 (AllOrigins Get)...');
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      const body = await res.text();
+      try {
+        const data = JSON.parse(body);
+        if (data.contents) return data.contents;
+        throw new Error('Formato JSON inválido no Proxy 3');
+      } catch (e) {
+        throw new Error('Proxy 3 retornou conteúdo não-JSON');
+      }
+    }
+  ];
+
+  for (const method of fetchMethods) {
     try {
-      const proxy1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res1 = await fetch(proxy1, { cache: 'no-store' });
-      if (!res1.ok) throw new Error(`Proxy 1 falhou: ${res1.status}`);
-      text = await res1.text();
-    } catch (e2) {
-      console.warn('Proxy 1 failed, trying proxy 2 (backup)...', e2);
-      const proxy2 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res2 = await fetch(proxy2, { cache: 'no-store' });
-      const data2 = await res2.json();
-      text = data2.contents || '';
+      text = await method();
+      if (text && text.trim().length > 0) break;
+    } catch (e: any) {
+      console.warn(e.message);
+      errorDetail = e.message;
     }
   }
 
   if (!text || text.trim().length === 0) {
-    throw new Error('Não foi possível baixar a lista (Servidor IPTV inacessível ou bloqueado).');
+    throw new Error(`Não foi possível baixar a lista. Detalhe: ${errorDetail || 'Todos os servidores de proxy falharam.'}`);
   }
 
-  if (!text || !text.includes('#EXTM3U')) {
-    throw new Error('O arquivo retornado não é uma lista M3U válida.');
+  // Verifica se é uma lista M3U válida, mas tenta ser flexível
+  const textPreview = text.substring(0, 100).replace(/\n/g, ' ');
+  console.log(`Início do conteúdo recebido: "${textPreview}..."`);
+
+  if (!text.includes('#EXTM3U') && !text.includes('#EXTINF')) {
+    throw new Error('O arquivo retornado não parece ser uma lista M3U válida.');
   }
 
-  // Handle both \n and \r\n
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items: M3UItem[] = [];
+  
+  console.log(`Processando ${lines.length} linhas de texto...`);
 
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].startsWith('#EXTINF')) continue;
+    const line = lines[i];
+    if (!line.startsWith('#EXTINF')) continue;
 
-    const info = lines[i];
-    const streamUrl = lines[i + 1] || '';
-    if (!streamUrl || streamUrl.startsWith('#')) continue;
+    const info = line;
+    // O URL do stream deve estar na linha seguinte ou subsequente (ignora outras tags)
+    let streamUrl = '';
+    let nextIdx = i + 1;
+    while (nextIdx < lines.length) {
+      const nextLine = lines[nextIdx];
+      // Aceita qualquer linha que não seja um comentário/tag
+      if (nextLine && !nextLine.startsWith('#')) {
+        streamUrl = nextLine;
+        break;
+      }
+      // Se encontrar outra tag EXTINF antes do URL, esta entrada está órfã
+      if (nextLine.startsWith('#EXTINF')) break;
+      nextIdx++;
+    }
 
-    // Extract tvg-logo
-    const logoMatch = info.match(/tvg-logo="([^"]*)"/i);
+    if (!streamUrl) continue;
+
+    // Regex mais flexíveis para atributos (com ou sem aspas)
+    // tvg-logo="url" ou tvg-logo=url
+    const logoMatch = info.match(/tvg-logo=["']?([^"' ]*)["']?/i);
     const logo = logoMatch ? logoMatch[1] : '';
 
-    // Extract group-title
-    const groupMatch = info.match(/group-title="([^"]*)"/i);
-    const group = groupMatch ? groupMatch[1] : 'Sem Categoria';
+    // group-title="name" ou group-title=name
+    const groupMatch = info.match(/group-title=["']?([^"']*)["']?(?: |$)/i) 
+                   || info.match(/group-title=["']?([^"']*)["']?(?:,|$)/i);
+    let group = groupMatch ? groupMatch[1] : 'Sem Categoria';
+    
+    // Limpa o grupo se tiver virgulas residuais (comum em m3u_plus)
+    group = group.split(',')[0].trim();
 
-    // Extract name (after the last comma)
+    // Extrai o nome após a última vírgula da linha #EXTINF
     const commaIdx = info.lastIndexOf(',');
     const name = commaIdx >= 0 ? info.slice(commaIdx + 1).trim() : 'Sem Nome';
 
     const type = classifyType(group, name);
     items.push({ name, logo, group, url: streamUrl, type });
-    i++; // skip the stream URL line
+    
+    i = nextIdx; // Pula para a linha do URL
   }
 
+  console.log(`Parsing concluído: ${items.length} itens extraídos.`);
   return items;
 }

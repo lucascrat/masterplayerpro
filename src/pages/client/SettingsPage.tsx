@@ -7,6 +7,7 @@ interface SettingsPageProps {
   device: DeviceInfo | null;
   onBack: () => void;
   onLogout?: () => void;
+  onRefreshPlaylist?: () => void;
 }
 
 // ── iOS instructions inline ──────────────────────────────────────────
@@ -35,7 +36,7 @@ function IOSSteps() {
   );
 }
 
-export default function SettingsPage({ mac, device, onBack, onLogout }: SettingsPageProps) {
+export default function SettingsPage({ mac, device, onBack, onLogout, onRefreshPlaylist }: SettingsPageProps) {
   const { canInstall, platform, triggerInstall, hasPrompt } = useInstallPWA();
   const [installing, setInstalling] = useState(false);
   const [showIOSSteps, setShowIOSSteps] = useState(false);
@@ -174,12 +175,19 @@ export default function SettingsPage({ mac, device, onBack, onLogout }: Settings
             <span className="label">Nome</span>
             <span className="value">{device?.playlist?.name || 'Nenhuma'}</span>
           </div>
-          <div className="settings-row">
-            <span className="label">URL</span>
-            <span className="value" style={{ fontSize: '0.8rem', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {device?.playlist?.url || 'Nenhuma'}
-            </span>
-          </div>
+          {onRefreshPlaylist && (
+            <button
+              onClick={onRefreshPlaylist}
+              style={{
+                marginTop: 12, width: '100%', padding: '10px',
+                background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)',
+                borderRadius: 8, color: '#ffd700', fontSize: '0.85rem', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit'
+              }}
+            >
+              🔄 Recarregar Lista
+            </button>
+          )}
         </div>
 
         {/* ── App info ── */}
@@ -187,7 +195,7 @@ export default function SettingsPage({ mac, device, onBack, onLogout }: Settings
           <h3>Aplicativo</h3>
           <div className="settings-row">
             <span className="label">Versão</span>
-            <span className="value">Krator+ v1.0</span>
+            <span className="value">Krator+ v1.3.1-debug</span>
           </div>
           <div className="settings-row">
             <span className="label">Player</span>

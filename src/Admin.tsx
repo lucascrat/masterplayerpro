@@ -176,12 +176,29 @@ export default function Admin() {
   const deletePlaylist = async (id: string) => {
     if (!confirm('Tem certeza? Isso apagará também todas as credenciais IPTV vinculadas a esta lista.')) return;
     try {
+      // 1. Buscar credenciais vinculadas para limpar leases
+      const { data: creds } = await supabase.from('iptv_credentials').select('id').eq('playlist_id', id);
+      const credIds = (creds || []).map(c => c.id);
+
+      if (credIds.length > 0) {
+        // 2. Limpar leases dessas credenciais
+        await supabase.from('credential_leases').delete().in('credential_id', credIds);
+        // 3. Limpar as credenciais
+        await supabase.from('iptv_credentials').delete().in('id', credIds);
+      }
+
+      // 4. Limpar dispositivos que apontam para esta playlist (set null)
+      await supabase.from('devices').update({ playlist_id: null }).eq('playlist_id', id);
+
+      // 5. Finalmente apagar a playlist
       const { error } = await supabase.from('playlists').delete().eq('id', id);
+      
       if (error) {
-        alert('Erro do banco: ' + error.message);
+        alert('Erro do banco ao apagar playlist: ' + error.message);
         return;
       }
       fetchAll();
+      alert('Playlist e dependências removidas com sucesso.');
     } catch (err: any) {
       alert('Erro ao excluir playlist: ' + err.message);
     }
@@ -310,14 +327,20 @@ export default function Admin() {
   };
 
   const deleteIptvCredential = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta credencial?')) return;
+    if (!confirm('Tem certeza que deseja excluir esta credencial? Todos os usuários usando ela serão desconectados.')) return;
     try {
+      // 1. Limpar leases desta credencial
+      await supabase.from('credential_leases').delete().eq('credential_id', id);
+
+      // 2. Apagar a credencial
       const { error } = await supabase.from('iptv_credentials').delete().eq('id', id);
+      
       if (error) {
         alert('Erro do banco: ' + error.message);
         return;
       }
       fetchAll();
+      alert('Credencial removida.');
     } catch (err: any) {
       alert('Erro ao excluir credencial: ' + err.message);
     }

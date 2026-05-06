@@ -35,28 +35,36 @@ export default function App() {
 
   // Busca e parseia o arquivo M3U da URL fornecida
   const loadPlaylist = useCallback(async (url: string) => {
+    console.log('--- INICIANDO CARREGAMENTO DE PLAYLIST ---');
+    console.log('URL Base:', url.split('?')[0]);
     setPlaylistLoading(true);
     try {
       const items = await parseM3UFromUrl(url);
-      console.log(`Playlist carregada: ${items.length} itens no total.`);
+      console.log(`Sucesso: ${items.length} itens encontrados.`);
       
       if (items.length === 0) {
-        throw new Error('O arquivo M3U foi lido mas não contém nenhum canal ou filme.');
+        console.warn('Aviso: Nenhum item extraído da lista.');
+        throw new Error('O arquivo M3U foi lido mas não contém nenhum canal ou filme. Verifique se as credenciais da lista estão corretas.');
       }
 
       const live = items.filter(i => i.type === 'live');
       const movies = items.filter(i => i.type === 'movie');
       const series = items.filter(i => i.type === 'series');
 
-      console.log(`Categorização: ${live.length} canais, ${movies.length} filmes, ${series.length} séries.`);
+      console.log('Resumo da Categorização:');
+      console.log(`- Canais: ${live.length}`);
+      console.log(`- Filmes: ${movies.length}`);
+      console.log(`- Séries: ${series.length}`);
 
       if (live.length === 0 && movies.length === 0 && series.length === 0) {
-        throw new Error('A lista foi lida mas nenhum item pôde ser categorizado.');
+        console.warn('Aviso: Todos os itens foram filtrados (nenhum tipo correspondente).');
+        throw new Error('A lista foi lida mas nenhum item pôde ser categorizado como TV, Filme ou Série.');
       }
 
       setPlaylist({ live, movies, series });
+      console.log('--- PLAYLIST DEFINIDA NO ESTADO COM SUCESSO ---');
     } catch (err: any) {
-      console.error('Erro detalhado:', err);
+      console.error('ERRO NO CARREGAMENTO:', err);
       alert('ERRO DE LISTA: ' + (err.message || 'Erro desconhecido ao processar M3U'));
     } finally {
       setPlaylistLoading(false);
@@ -388,6 +396,14 @@ export default function App() {
     }
   }, [session]);
 
+  const handleRefresh = useCallback(() => {
+    const saved = localStorage.getItem(AUTH_KEY);
+    if (saved) {
+      const stored = JSON.parse(saved);
+      if (stored._playlistUrl) loadPlaylist(stored._playlistUrl);
+    }
+  }, [loadPlaylist]);
+
   // Global keyboard shortcut: '/' or Ctrl+F → open search
   useEffect(() => {
     if (!session) return;
@@ -406,10 +422,12 @@ export default function App() {
 
   // Loading screen
   if (currentPage === 'loading') {
+    const totalItems = (playlist?.live?.length || 0) + (playlist?.movies?.length || 0) + (playlist?.series?.length || 0);
     return (
       <div className="loading-screen">
         <div className="spinner" />
         <p>Carregando playlist...</p>
+        {totalItems > 0 && <p style={{ fontSize: '0.9rem', color: '#4caf50' }}>{totalItems} itens processados</p>}
         <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           Aguarde, isso pode levar alguns segundos
         </p>
@@ -502,7 +520,13 @@ export default function App() {
       )}
 
       {currentPage === 'settings' && (
-        <SettingsPage mac={session?.username || ''} device={null} onBack={handleBack} onLogout={logout} />
+        <SettingsPage 
+          mac={session?.username || ''} 
+          device={null} 
+          onBack={handleBack} 
+          onLogout={logout} 
+          onRefreshPlaylist={handleRefresh}
+        />
       )}
 
       {playingUrl && (
