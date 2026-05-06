@@ -1,3 +1,8 @@
+/**
+ * Supabase client configuration
+ * Default schema: masterplayer
+ * Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in the environment.
+ */
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
