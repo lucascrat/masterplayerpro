@@ -82,6 +82,9 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
     responseType: 'stream',   // Stream instead of loading all to memory
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    },
   });
 
   return new Promise<PlaylistData>((resolve, reject) => {
@@ -263,6 +266,9 @@ async function validateAgainstServer(config: RefConfig, user: string, pass: stri
       responseType: 'stream',
       maxRedirects: 5,
       validateStatus: () => true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
     });
 
     if (res.status !== 200) {
@@ -429,6 +435,9 @@ export async function testFetchM3U(url: string): Promise<{ status: number; conte
     responseType: 'text',
     maxContentLength: 100 * 1024 * 1024,
     validateStatus: () => true,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    },
   });
   const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   return {

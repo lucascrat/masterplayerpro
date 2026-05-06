@@ -163,7 +163,7 @@ app.get('/api/proxy', async (req, res) => {
     // without forwarding it the IPTV server ignores seek/resume and iOS refuses to play.
     const rangeHeader = req.headers['range'];
     const upstreamHeaders: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (compatible; IPTV)',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       'Accept': '*/*',
     };
     if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
