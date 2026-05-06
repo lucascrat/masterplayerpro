@@ -99,8 +99,9 @@ export default function App() {
 
         if (existingLease?.iptv_credentials) {
           credential = existingLease.iptv_credentials;
-          playlistUrl = (credential.playlists as any)?.url || '';
-          playlistName = (credential.playlists as any)?.name || '';
+          playlistUrl = (credential as any).playlists?.url || '';
+          playlistName = (credential as any).playlists?.name || '';
+          console.log('Sessão restaurada. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
         } else {
           sessionId = undefined; // Sessão expirou, criar nova
         }
@@ -147,8 +148,9 @@ export default function App() {
 
         sessionId = (newLease as any).session_id;
         credential = availableCred;
-        playlistUrl = (availableCred.playlists as any)?.url || '';
-        playlistName = (availableCred.playlists as any)?.name || '';
+        playlistUrl = (availableCred as any).playlists?.url || '';
+        playlistName = (availableCred as any).playlists?.name || '';
+        console.log('Nova sessão. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
       }
 
       // 6. Montar sessão e injetar credenciais na URL
@@ -160,10 +162,28 @@ export default function App() {
         sessionId
       };
 
-      // Substituir credenciais na URL (suporta username/user e password/pass)
-      const finalUrl = playlistUrl
-        .replace(/(username|user)=[^&]*/i, `$1=${credential.username}`)
-        .replace(/(password|pass)=[^&]*/i, `$1=${credential.password}`);
+      // Construção robusta da URL com URL API
+      let finalUrl = playlistUrl;
+      try {
+        const urlObj = new URL(playlistUrl);
+        
+        // Remove parâmetros antigos se existirem (para evitar duplicatas)
+        urlObj.searchParams.delete('username');
+        urlObj.searchParams.delete('user');
+        urlObj.searchParams.delete('password');
+        urlObj.searchParams.delete('pass');
+
+        // Adiciona as credenciais da conta IPTV
+        urlObj.searchParams.set('username', credential.username);
+        urlObj.searchParams.set('password', credential.password);
+        
+        finalUrl = urlObj.toString();
+      } catch (e) {
+        // Fallback para replace simples se a URL for inválida para o construtor
+        finalUrl = playlistUrl
+          .replace(/(username|user)=[^&]*/i, `$1=${credential.username}`)
+          .replace(/(password|pass)=[^&]*/i, `$1=${credential.password}`);
+      }
 
       setSession(auth);
       // Salvar URL para poder recarregar depois
