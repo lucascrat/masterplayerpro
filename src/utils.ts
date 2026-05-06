@@ -97,8 +97,12 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
     // CORS proxy fallback
     const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxy, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Proxy fetch failed: HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`O servidor IPTV recusou a conexão (Erro ${res.status}).`);
     text = await res.text();
+  }
+
+  if (!text || text.trim().length === 0) {
+    throw new Error('A lista está vazia ou o servidor IPTV não retornou dados.');
   }
 
   if (!text || !text.includes('#EXTM3U')) {

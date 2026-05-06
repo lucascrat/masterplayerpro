@@ -68,7 +68,8 @@ export default function Admin() {
         password: p.password,
         type: p.type,
         isActive: p.is_active,
-        createdAt: p.created_at
+        createdAt: p.created_at,
+        updatedAt: p.created_at // Use created_at as fallback for updatedAt
       })));
 
       setAppUsers((uData || []).map((u: any) => ({
