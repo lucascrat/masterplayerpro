@@ -314,10 +314,13 @@ export default function App() {
   const goSearch = useCallback(() => setCurrentPage('search'), []);
 
   // When user stops watching, immediately tell server (faster credential release)
-  const handleStopPlaying = useCallback(() => {
+  const handleStopPlaying = useCallback(async () => {
     setPlayingUrl(null);
     if (session?.sessionId) {
-      axios.post(`${API_BASE}/auth/heartbeat`, { sessionId: session.sessionId, isWatching: false }, { timeout: 10000 }).catch(() => {});
+      await supabase
+        .from('credential_leases')
+        .update({ is_watching: false })
+        .eq('session_id', session.sessionId);
     }
   }, [session]);
 

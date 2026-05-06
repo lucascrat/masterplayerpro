@@ -1,4 +1,4 @@
-// Deployment Trigger: Supabase Schema USAGE fix & Admin SPA routing
+// Version: 1.0.1 - Force Cache Refresh for Serverless Migration
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
