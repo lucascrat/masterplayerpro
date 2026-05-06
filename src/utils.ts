@@ -80,7 +80,7 @@ function classifyType(group: string, name: string): 'live' | 'movie' | 'series' 
   // Series indicators
   if (/série|series|seri[e]|novela|soap/i.test(g)) return 'series';
 
-  // Default to live for channels
+  // Default to live for everything else
   return 'live';
 }
 

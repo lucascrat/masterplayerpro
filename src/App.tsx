@@ -37,16 +37,26 @@ export default function App() {
     setPlaylistLoading(true);
     try {
       const items = await parseM3UFromUrl(url);
-      if (items.length === 0) throw new Error('Nenhum item encontrado na lista.');
+      console.log(`Playlist carregada: ${items.length} itens no total.`);
       
-      setPlaylist({
-        live:   items.filter(i => i.type === 'live'),
-        movies: items.filter(i => i.type === 'movie'),
-        series: items.filter(i => i.type === 'series'),
-      });
+      if (items.length === 0) {
+        throw new Error('O arquivo M3U foi lido mas não contém nenhum canal ou filme.');
+      }
+
+      const live = items.filter(i => i.type === 'live');
+      const movies = items.filter(i => i.type === 'movie');
+      const series = items.filter(i => i.type === 'series');
+
+      console.log(`Categorização: ${live.length} canais, ${movies.length} filmes, ${series.length} séries.`);
+
+      if (live.length === 0 && movies.length === 0 && series.length === 0) {
+        throw new Error('A lista foi lida mas nenhum item pôde ser categorizado.');
+      }
+
+      setPlaylist({ live, movies, series });
     } catch (err: any) {
-      console.error('Erro ao carregar playlist:', err);
-      alert('Erro ao carregar lista: ' + (err.message || 'Verifique sua conexão ou a URL da lista.'));
+      console.error('Erro detalhado:', err);
+      alert('ERRO DE LISTA: ' + (err.message || 'Erro desconhecido ao processar M3U'));
     } finally {
       setPlaylistLoading(false);
     }
