@@ -175,26 +175,36 @@ export default function App() {
   };
 
   // On mount: try to restore session from localStorage
-  // Passes saved sessionId so the server reuses the existing session (no new screen)
   useEffect(() => {
     const saved = localStorage.getItem(AUTH_KEY);
     if (saved) {
-      const auth: AuthSession = JSON.parse(saved);
-      // Rewards code session — skip restore if time already expired
-      if (auth.rewardCode && auth.accessUntil) {
-        if (new Date(auth.accessUntil) <= new Date()) {
-          localStorage.removeItem(AUTH_KEY);
-          setCurrentPage('login');
-          return;
+      try {
+        const auth: AuthSession = JSON.parse(saved);
+        
+        // Se temos uma sessão salva, vamos para a Home IMEDIATAMENTE 
+        // para evitar a tela preta de "loading". A validação acontece em paralelo.
+        setSession(auth);
+        setCurrentPage('home');
+
+        if (auth.rewardCode && auth.accessUntil) {
+          if (new Date(auth.accessUntil) <= new Date()) {
+            logout();
+            return;
+          }
+          doCodeLogin(auth.rewardCode, auth.sessionId);
+        } else {
+          // Re-validar login e carregar playlist em background
+          doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
+            if (!ok) {
+              // Se a validação falhar (ex: usuário excluído), aí sim desloga
+              logout();
+            }
+          });
         }
-        doCodeLogin(auth.rewardCode, auth.sessionId).then(ok => {
-          setCurrentPage(ok ? 'home' : 'login');
-        });
-        return;
+      } catch (e) {
+        localStorage.removeItem(AUTH_KEY);
+        setCurrentPage('login');
       }
-      doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
-        setCurrentPage(ok ? 'home' : 'login');
-      });
     } else {
       setCurrentPage('login');
     }
