@@ -139,7 +139,12 @@ function NfCard({ item, poster, rank, onClick }: NfCardProps) {
         {/* No poster fallback — show when poster is empty OR image failed to load */}
         {(poster === '' || error) && (
           <div className="nf-card-placeholder">
-            {item.type === 'series' ? '📺' : '🎬'}
+            <div className="nf-card-placeholder-icon">
+              {item.type === 'series' ? '📺' : '🎬'}
+            </div>
+            <div className="nf-card-placeholder-text">
+              {item.name}
+            </div>
           </div>
         )}
         <div className="nf-card-hover-overlay">▶</div>

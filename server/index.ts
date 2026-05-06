@@ -280,7 +280,7 @@ app.post('/api/tmdb/posters', async (req, res) => {
       try {
         const data = type === 'series'
           ? await searchSeries(name, 'pt-BR')
-          : await searchMovie(name, 'pt-BR');
+          : await searchMovie(name, 'pt-BR', true); // skip details for speed
         if (data?.poster) results[name] = data.poster;
       } catch { /* ignore */ }
     }));

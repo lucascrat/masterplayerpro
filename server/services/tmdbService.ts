@@ -29,17 +29,26 @@ function extractYear(name: string): string | null {
 }
 
 function cleanTitle(name: string): string {
-  return name
+  let cleaned = name
     .replace(/\(\d{4}\)/g, '')   // remove (year)
     .replace(/\[.*?\]/g, '')      // remove [LEG], [DUB], etc.
+    .replace(/\b(4K|UHD|FHD|HD|SD|H264|H265|HEVC|DUBLADO|LEGENDADO|DUAL|AUDIO|S\d+)\b/gi, '')
+    // Remove category tags like "FILMES | DRAMA" or "(A)"
+    .replace(/\b(FILMES|SERIES|FILME|SERIE|ANIMES|ANIME|DESENHOS|DESENHO|LANÇAMENTOS|LANÇAMENTO|AÇÃO|DRAMA|COMÉDIA|TERROR|SUSPENSE|ROMANCE|FICÇÃO|AVENTURA)\b/gi, '')
+    .replace(/\([A-Z]\)/g, '')   // remove (A), (H), etc.
+    .replace(/[|:-]/g, ' ')       // replace separators with space
     .replace(/\s+/g, ' ')
     .trim();
+  
+  // If it's a long title with many spaces, it might have more garbage at the end
+  // But for now, let's keep it simple.
+  return cleaned;
 }
 
-export async function searchMovie(rawName: string, language = 'pt-BR'): Promise<TMDBResult | null> {
+export async function searchMovie(rawName: string, language = 'pt-BR', skipDetails = false): Promise<TMDBResult | null> {
   const year = extractYear(rawName);
   const title = cleanTitle(rawName);
-  const cacheKey = `movie:${title}:${year || ''}:${language}`;
+  const cacheKey = `movie:${title}:${year || ''}:${language}:${skipDetails ? 'skip' : 'full'}`;
 
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
@@ -61,15 +70,17 @@ export async function searchMovie(rawName: string, language = 'pt-BR'): Promise<
     // Fetch details for genres and runtime
     let genres: string[] = [];
     let runtime: number | null = null;
-    try {
-      const detail = await axios.get(`${BASE_URL}/movie/${movie.id}`, {
-        params: { language },
-        headers: headers(),
-        timeout: 5000,
-      });
-      genres = detail.data.genres?.map((g: any) => g.name) || [];
-      runtime = detail.data.runtime || null;
-    } catch { /* ignore */ }
+    if (!skipDetails) {
+      try {
+        const detail = await axios.get(`${BASE_URL}/movie/${movie.id}`, {
+          params: { language },
+          headers: headers(),
+          timeout: 5000,
+        });
+        genres = detail.data.genres?.map((g: any) => g.name) || [];
+        runtime = detail.data.runtime || null;
+      } catch { /* ignore */ }
+    }
 
     const result: TMDBResult = {
       title: movie.title || rawName,
