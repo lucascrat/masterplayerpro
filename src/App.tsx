@@ -34,66 +34,139 @@ export default function App() {
   const deviceId = generateMAC();
 
   const doLogin = async (username: string, password: string, existingSessionId?: string): Promise<boolean> => {
+    setLoginLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/auth/login`, { username, password, sessionId: existingSessionId }, { timeout: 45000 });
-      const auth: AuthSession = { username, password, playlistName: res.data.playlistName, userId: res.data.userId, sessionId: res.data.sessionId };
+      const userLower = username.trim().toLowerCase();
+      
+      // 1. Validar Usuário
+      const { data: appUser, error: uError } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('username', userLower)
+        .eq('password', password)
+        .single();
+
+      if (uError || !appUser) {
+        setLoginError('Usuário ou senha incorretos');
+        return false;
+      }
+
+      if (!appUser.is_active) {
+        setLoginError('Conta desativada. Contate o administrador.');
+        return false;
+      }
+
+      // 2. Buscar Playlist vinculada a este Dispositivo (MAC)
+      const { data: device, error: dError } = await supabase
+        .from('devices')
+        .select('*, playlists(*)')
+        .eq('mac_address', deviceId)
+        .single();
+
+      if (dError || !device || !device.playlists) {
+        setLoginError('Dispositivo não autorizado ou sem lista vinculada.');
+        return false;
+      }
+
+      if (!device.is_active) {
+        setLoginError('Dispositivo bloqueado pelo administrador.');
+        return false;
+      }
+
+      // 3. Gerenciamento de Sessão/Pool (Simplificado para Supabase Direto)
+      let sessionId = existingSessionId;
+      let credential = null;
+
+      if (sessionId) {
+        // Tentar reaproveitar lease existente
+        const { data: existingLease } = await supabase
+          .from('credential_leases')
+          .select('*, iptv_credentials(*)')
+          .eq('session_id', sessionId)
+          .single();
+        
+        if (existingLease && existingLease.iptv_credentials) {
+          credential = existingLease.iptv_credentials;
+        } else {
+          sessionId = undefined; // Se não existe mais, limpa para criar nova
+        }
+      }
+
+      if (!sessionId) {
+        // Buscar credencial disponível no pool desta playlist
+        // (Buscamos credenciais ativas da playlist que não excederam max_leases)
+        const { data: creds } = await supabase
+          .from('iptv_credentials')
+          .select('*, credential_leases(id)')
+          .eq('playlist_id', device.playlists.id)
+          .eq('is_active', true);
+
+        const availableCred = creds?.find(c => (c.credential_leases?.length || 0) < c.max_leases);
+
+        if (!availableCred) {
+          setLoginError('Limite de conexões atingido para esta lista.');
+          return false;
+        }
+
+        // Criar novo Lease
+        const { data: newLease, error: lError } = await supabase
+          .from('credential_leases')
+          .insert([{
+            app_user_id: appUser.id,
+            credential_id: availableCred.id,
+            is_watching: false
+          }])
+          .select()
+          .single();
+
+        if (lError || !newLease) throw new Error('Erro ao criar sessão');
+        
+        sessionId = newLease.session_id;
+        credential = availableCred;
+      }
+
+      // 4. Montar Sessão Final
+      const auth: AuthSession = { 
+        username, 
+        password, 
+        playlistName: device.playlists.name, 
+        userId: appUser.id, 
+        sessionId 
+      };
+
+      // Injetar credenciais na URL da playlist para o player
+      const finalPlaylist: PlaylistData = {
+        ...device.playlists,
+        url: device.playlists.url
+          .replace('username=', `username=${credential.username}`)
+          .replace('password=', `password=${credential.password}`)
+      };
+
       setSession(auth);
-      setPlaylist(res.data.playlist);
+      setPlaylist(finalPlaylist);
       localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
       setLoginError(null);
       return true;
+
     } catch (err: any) {
-      const msg = err.response?.data?.error || 'Erro ao conectar. Tente novamente.';
-      setLoginError(msg);
+      console.error('Login error:', err);
+      setLoginError('Erro ao processar login. Tente novamente.');
       return false;
+    } finally {
+      setLoginLoading(false);
     }
   };
 
   const doCodeLogin = async (code: string, existingSessionId?: string): Promise<boolean> => {
-    try {
-      const res = await axios.post(`${API_BASE}/auth/redeem-code`, { code, sessionId: existingSessionId }, { timeout: 45000 });
-      const auth: AuthSession = {
-        username: `code:${res.data.code}`,
-        password: '',
-        playlistName: res.data.playlistName,
-        userId: res.data.userId,
-        sessionId: res.data.sessionId,
-        rewardCode: res.data.code,
-        accessUntil: res.data.accessUntil,
-        coins: res.data.coins,
-      };
-      setSession(auth);
-      setPlaylist(res.data.playlist);
-      localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
-      setLoginError(null);
-      return true;
-    } catch (err: any) {
-      const msg = err.response?.data?.error || 'Erro ao validar código. Tente novamente.';
-      setLoginError(msg);
-      return false;
-    }
+    // Sistema de recompensas/código será migrado para Supabase em breve
+    setLoginError('Sistema de códigos em manutenção.');
+    return false;
   };
 
-  const handleLogin = async (username: string, password: string) => {
-    setLoginLoading(true);
-    setLoginError(null);
-    const ok = await doLogin(username, password);
-    setLoginLoading(false);
-    if (ok) setCurrentPage('home');
-  };
-
-  const handleLoginWithCode = async (code: string) => {
-    setLoginLoading(true);
-    setLoginError(null);
-    const ok = await doCodeLogin(code);
-    setLoginLoading(false);
-    if (ok) setCurrentPage('home');
-  };
-
-  const logout = () => {
-    // Release this device's session on explicit logout
+  const logout = async () => {
     if (session?.sessionId) {
-      navigator.sendBeacon(`${API_BASE}/auth/logout`, JSON.stringify({ sessionId: session.sessionId }));
+      // Remover o lease ao deslogar
+      await supabase.from('credential_leases').delete().eq('session_id', session.sessionId);
     }
     localStorage.removeItem(AUTH_KEY);
     setSession(null);
@@ -130,12 +203,13 @@ export default function App() {
   const fetchFavorites = useCallback(async () => {
     if (!session && currentPage === 'login') return;
     try {
-      const params: any = {};
-      if (session?.userId) params.appUserId = session.userId;
-      else params.deviceId = deviceId;
+      const query = supabase.from('user_favorites').select('*');
+      if (session?.userId) query.eq('app_user_id', session.userId);
+      else query.eq('device_id', deviceId);
 
-      const res = await axios.get(`${API_BASE}/favorites`, { params });
-      setFavorites(res.data);
+      const { data, error } = await query;
+      if (error) throw error;
+      setFavorites(data || []);
     } catch (err) {
       console.error('Failed to fetch favorites');
     }
@@ -149,17 +223,21 @@ export default function App() {
 
   const toggleFavorite = async (item: M3UItem) => {
     try {
-      const payload: any = {
-        itemName: item.name,
-        itemType: item.type,
-        itemGroup: item.group,
-        itemLogo: item.logo,
-        itemUrl: item.url,
-      };
-      if (session?.userId) payload.appUserId = session.userId;
-      else payload.deviceId = deviceId;
-
-      await axios.post(`${API_BASE}/favorites/toggle`, payload);
+      const isFav = favorites.find(f => f.itemName === item.name);
+      
+      if (isFav) {
+        await supabase.from('user_favorites').delete().eq('id', isFav.id);
+      } else {
+        await supabase.from('user_favorites').insert([{
+          app_user_id: session?.userId || null,
+          device_id: session?.userId ? null : deviceId,
+          itemName: item.name,
+          itemType: item.type,
+          itemGroup: item.group,
+          itemLogo: item.logo,
+          itemUrl: item.url
+        }]);
+      }
       fetchFavorites();
     } catch (err) {
       alert('Erro ao atualizar favoritos');
@@ -184,10 +262,16 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
 
-    const sendHeartbeat = () => {
+    const sendHeartbeat = async () => {
       if (session?.sessionId) {
         const isWatching = playingUrl !== null && !document.hidden;
-        axios.post(`${API_BASE}/auth/heartbeat`, { sessionId: session.sessionId, isWatching }, { timeout: 10000 }).catch(() => {});
+        await supabase
+          .from('credential_leases')
+          .update({ 
+            last_activity: new Date().toISOString(),
+            is_watching: isWatching 
+          })
+          .eq('session_id', session.sessionId);
       }
     };
 
