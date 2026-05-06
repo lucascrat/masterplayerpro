@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from './lib/supabase';
 import type { DeviceInfo } from './types';
 
 // Pages
@@ -10,11 +10,8 @@ import AdminDevices from './pages/admin/AdminDevices';
 import AdminPlaylists from './pages/admin/AdminPlaylists';
 import AdminUsers from './pages/admin/AdminUsers';
 
-const API_BASE = '/api';
 const ADMIN_SESSION_KEY = 'masterplayer_admin';
-
-// Axios instance with admin auth header
-const adminApi = axios.create({ baseURL: API_BASE });
+const DEFAULT_ADMIN_ID = '4a5e54c2-8954-438b-9e9d-4daad9674807';
 
 export default function Admin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -33,25 +30,67 @@ export default function Admin() {
   useEffect(() => {
     const saved = localStorage.getItem(ADMIN_SESSION_KEY);
     if (saved === 'master2024') {
-      adminApi.defaults.headers.common['authorization'] = 'master2024';
       setIsLoggedIn(true);
     }
   }, []);
 
   const fetchAll = async () => {
     try {
-      const [dRes, pRes, uRes, cRes] = await Promise.all([
-        adminApi.get('/admin/devices'),
-        adminApi.get('/admin/playlists'),
-        adminApi.get('/admin/app-users'),
-        adminApi.get('/admin/iptv-credentials'),
+      // Fetch data from Supabase (masterplayer schema is default in src/lib/supabase.ts)
+      const [
+        { data: dData },
+        { data: pData },
+        { data: uData },
+        { data: cData }
+      ] = await Promise.all([
+        supabase.from('devices').select('*').order('created_at', { ascending: false }),
+        supabase.from('playlists').select('*').order('created_at', { ascending: false }),
+        supabase.from('app_users').select('*').order('created_at', { ascending: false }),
+        supabase.from('iptv_credentials').select('*').order('created_at', { ascending: false }),
       ]);
-      setDevices(dRes.data);
-      setPlaylists(pRes.data);
-      setAppUsers(uRes.data);
-      setIptvCredentials(cRes.data);
+
+      // Map snake_case to camelCase
+      setDevices((dData || []).map((d: any) => ({
+        id: d.id,
+        macAddress: d.mac_address,
+        name: d.name,
+        isActive: d.is_active,
+        playlistId: d.playlist_id,
+        createdAt: d.created_at
+      })));
+
+      setPlaylists((pData || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        url: p.url,
+        username: p.username,
+        password: p.password,
+        type: p.type,
+        isActive: p.is_active,
+        createdAt: p.created_at
+      })));
+
+      setAppUsers((uData || []).map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        password: u.password,
+        name: u.name,
+        isActive: u.is_active,
+        createdAt: u.created_at
+      })));
+
+      setIptvCredentials((cData || []).map((c: any) => ({
+        id: c.id,
+        username: c.username,
+        password: c.password,
+        playlistId: c.playlist_id,
+        maxLeases: c.max_leases,
+        isActive: c.is_active,
+        createdAt: c.created_at
+      })));
+
     } catch (err) {
-      console.error('Failed to fetch admin data');
+      console.error('Failed to fetch admin data from Supabase:', err);
     }
   };
 
@@ -61,7 +100,6 @@ export default function Admin() {
 
   const handleLogin = (pass: string) => {
     if (pass === 'master2024') {
-      adminApi.defaults.headers.common['authorization'] = 'master2024';
       localStorage.setItem(ADMIN_SESSION_KEY, 'master2024');
       setIsLoggedIn(true);
       setLoginError(null);
@@ -72,7 +110,7 @@ export default function Admin() {
 
   const toggleDeviceActive = async (id: string, current: boolean) => {
     try {
-      await adminApi.patch(`/admin/devices/${id}`, { isActive: !current });
+      await supabase.from('devices').update({ is_active: !current }).eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao atualizar dispositivo');
@@ -82,7 +120,7 @@ export default function Admin() {
   const deleteDevice = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este dispositivo?')) return;
     try {
-      await adminApi.delete(`/admin/devices/${id}`);
+      await supabase.from('devices').delete().eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao excluir dispositivo');
@@ -92,18 +130,16 @@ export default function Admin() {
   const saveDevice = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        mac_address: editDevice.macAddress,
+        is_active: editDevice.isActive,
+        playlist_id: editDevice.playlistId || null
+      };
+
       if (editDevice.id) {
-        await adminApi.patch(`/admin/devices/${editDevice.id}`, {
-          macAddress: editDevice.macAddress,
-          isActive: editDevice.isActive,
-          playlistId: editDevice.playlistId
-        });
+        await supabase.from('devices').update(payload).eq('id', editDevice.id);
       } else {
-        await adminApi.post(`/admin/devices`, {
-          macAddress: editDevice.macAddress,
-          isActive: editDevice.isActive,
-          playlistId: editDevice.playlistId
-        });
+        await supabase.from('devices').insert([payload]);
       }
       setShowModal(false);
       fetchAll();
@@ -115,7 +151,7 @@ export default function Admin() {
   const deletePlaylist = async (id: string) => {
     if (!confirm('Tem certeza? Isso afetará todos os dispositivos que usam esta playlist.')) return;
     try {
-      await adminApi.delete(`/admin/playlists/${id}`);
+      await supabase.from('playlists').delete().eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao excluir playlist');
@@ -127,17 +163,23 @@ export default function Admin() {
     const url = prompt('URL da Playlist (M3U):');
     if (!name || !url) return;
     try {
-      await adminApi.post(`/admin/playlists`, { name, url });
+      const { error } = await supabase.from('playlists').insert([{
+        name,
+        url,
+        admin_id: DEFAULT_ADMIN_ID,
+        type: 'M3U',
+        is_active: true
+      }]);
+      if (error) throw error;
       fetchAll();
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Erro desconhecido';
-      alert(`Erro ao adicionar playlist: ${msg}`);
+      alert(`Erro ao adicionar playlist: ${err.message || 'Erro desconhecido'}`);
     }
   };
 
   const updatePlaylist = async (id: string, data: { username: string; password: string }) => {
     try {
-      await adminApi.patch(`/admin/playlists/${id}`, data);
+      await supabase.from('playlists').update(data).eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao atualizar credenciais da playlist');
@@ -147,16 +189,28 @@ export default function Admin() {
   // App Users CRUD
   const createAppUser = async (data: { username: string; password: string; name?: string }) => {
     try {
-      await adminApi.post('/admin/app-users', data);
+      const { error } = await supabase.from('app_users').insert([{
+        username: data.username,
+        password: data.password,
+        name: data.name,
+        is_active: true
+      }]);
+      if (error) throw error;
       fetchAll();
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Erro ao criar usuário');
+      alert(err.message || 'Erro ao criar usuário');
     }
   };
 
   const updateAppUser = async (id: string, data: any) => {
     try {
-      await adminApi.patch(`/admin/app-users/${id}`, data);
+      const payload: any = {};
+      if (data.username !== undefined) payload.username = data.username;
+      if (data.password !== undefined) payload.password = data.password;
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.isActive !== undefined) payload.is_active = data.isActive;
+
+      await supabase.from('app_users').update(payload).eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao atualizar usuário');
@@ -166,7 +220,7 @@ export default function Admin() {
   const deleteAppUser = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
     try {
-      await adminApi.delete(`/admin/app-users/${id}`);
+      await supabase.from('app_users').delete().eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao excluir usuário');
@@ -174,19 +228,26 @@ export default function Admin() {
   };
 
   // IPTV Credentials CRUD
-  const createIptvCredential = async (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) => {
+  const createIptvCredential = async (data: { username: string; password: string; playlistId?: string; maxLeases?: number }) => {
     try {
-      await adminApi.post('/admin/iptv-credentials', data);
+      const { error } = await supabase.from('iptv_credentials').insert([{
+        username: data.username,
+        password: data.password,
+        playlist_id: data.playlistId,
+        max_leases: data.maxLeases || 2,
+        is_active: true
+      }]);
+      if (error) throw error;
       fetchAll();
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Erro ao criar credencial');
+      alert(err.message || 'Erro ao criar credencial');
     }
   };
 
   const deleteIptvCredential = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta credencial?')) return;
     try {
-      await adminApi.delete(`/admin/iptv-credentials/${id}`);
+      await supabase.from('iptv_credentials').delete().eq('id', id);
       fetchAll();
     } catch (err) {
       alert('Erro ao excluir credencial');
