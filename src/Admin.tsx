@@ -185,16 +185,47 @@ export default function Admin() {
     const name = prompt('Nome da Playlist:');
     const url = prompt('URL da Playlist (M3U):');
     if (!name || !url) return;
+
     try {
-      const { error } = await supabase.from('playlists').insert([{
+      // Tentar extrair username e password da URL automaticamente
+      let extractedUser = '';
+      let extractedPass = '';
+      try {
+        const urlObj = new URL(url);
+        extractedUser = urlObj.searchParams.get('username') || '';
+        extractedPass = urlObj.searchParams.get('password') || '';
+      } catch (e) {
+        // Se não for uma URL válida com searchParams, tenta um fallback simples
+        const userMatch = url.match(/[?&]username=([^&]+)/);
+        const passMatch = url.match(/[?&]password=([^&]+)/);
+        if (userMatch) extractedUser = userMatch[1];
+        if (passMatch) extractedPass = passMatch[1];
+      }
+
+      // 1. Criar a Playlist
+      const { data: pData, error: pError } = await supabase.from('playlists').insert([{
         name,
         url,
         admin_id: DEFAULT_ADMIN_ID,
         type: 'M3U',
         is_active: true
-      }]);
-      if (error) throw error;
+      }]).select().single();
+
+      if (pError) throw pError;
+
+      // 2. Se extraiu credenciais, criar automaticamente a Credencial IPTV vinculada
+      if (extractedUser && extractedPass && pData) {
+        await supabase.from('iptv_credentials').insert([{
+          username: extractedUser,
+          password: extractedPass,
+          playlist_id: pData.id,
+          max_leases: 2,
+          is_active: true
+        }]);
+      }
+
       fetchAll();
+      alert('Playlist adicionada com sucesso!' + (extractedUser ? ' (Credenciais extraídas e vinculadas automaticamente)' : ''));
     } catch (err: any) {
       alert(`Erro ao adicionar playlist: ${err.message || 'Erro desconhecido'}`);
     }
