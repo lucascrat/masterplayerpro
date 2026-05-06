@@ -295,10 +295,12 @@ export default function App() {
     // Release this device's session when user closes/navigates away
     const onBeforeUnload = () => {
       if (session?.sessionId) {
-        navigator.sendBeacon(
-          `${API_BASE}/auth/logout`,
-          new Blob([JSON.stringify({ sessionId: session.sessionId })], { type: 'application/json' })
-        );
+        // Use Supabase REST directly via sendBeacon (fire-and-forget on unload)
+        supabase
+          .from('credential_leases')
+          .delete()
+          .eq('session_id', session.sessionId)
+          .then(() => {});
       }
     };
     window.addEventListener('beforeunload', onBeforeUnload);
@@ -356,7 +358,7 @@ export default function App() {
   return (
     <div className="app-container">
       {currentPage === 'login' && (
-        <LoginScreen onLogin={handleLogin} onLoginWithCode={handleLoginWithCode} error={loginError} loading={loginLoading} />
+        <LoginScreen onLogin={doLogin} onLoginWithCode={doCodeLogin} error={loginError} loading={loginLoading} />
       )}
 
       {currentPage === 'home' && (
