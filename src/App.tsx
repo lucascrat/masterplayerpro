@@ -1,6 +1,5 @@
-// Deployment Trigger: Cloudflare Framework Preset set to Vite
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { supabase } from './lib/supabase';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
 import { generateMAC } from './utils';
@@ -17,7 +16,6 @@ import SettingsPage from './pages/client/SettingsPage';
 import HlsPlayer from './components/HlsPlayer';
 import RewardSessionBadge from './components/RewardSessionBadge';
 
-const API_BASE = '/api';
 const AUTH_KEY = 'masterplayer_auth';
 const CONTENT_PAGES: Page[] = ['livetv', 'movies', 'series', 'search', 'settings'];
 
@@ -25,7 +23,7 @@ export default function App() {
   const clock = useClock();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
-  const [currentPage, setCurrentPage] = useState<Page>('loading');
+  const [currentPage, setCurrentPage] = useState<Page>('login');
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
