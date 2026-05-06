@@ -173,12 +173,16 @@ export default function Admin() {
   };
 
   const deletePlaylist = async (id: string) => {
-    if (!confirm('Tem certeza? Isso afetará todos os dispositivos que usam esta playlist.')) return;
+    if (!confirm('Tem certeza? Isso apagará também todas as credenciais IPTV vinculadas a esta lista.')) return;
     try {
-      await supabase.from('playlists').delete().eq('id', id);
+      const { error } = await supabase.from('playlists').delete().eq('id', id);
+      if (error) {
+        alert('Erro do banco: ' + error.message);
+        return;
+      }
       fetchAll();
-    } catch (err) {
-      alert('Erro ao excluir playlist');
+    } catch (err: any) {
+      alert('Erro ao excluir playlist: ' + err.message);
     }
   };
 
@@ -276,10 +280,14 @@ export default function Admin() {
   const deleteAppUser = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
     try {
-      await supabase.from('app_users').delete().eq('id', id);
+      const { error } = await supabase.from('app_users').delete().eq('id', id);
+      if (error) {
+        alert('Erro do banco: ' + error.message);
+        return;
+      }
       fetchAll();
-    } catch (err) {
-      alert('Erro ao excluir usuário');
+    } catch (err: any) {
+      alert('Erro ao excluir usuário: ' + err.message);
     }
   };
 
@@ -303,10 +311,14 @@ export default function Admin() {
   const deleteIptvCredential = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta credencial?')) return;
     try {
-      await supabase.from('iptv_credentials').delete().eq('id', id);
+      const { error } = await supabase.from('iptv_credentials').delete().eq('id', id);
+      if (error) {
+        alert('Erro do banco: ' + error.message);
+        return;
+      }
       fetchAll();
-    } catch (err) {
-      alert('Erro ao excluir credencial');
+    } catch (err: any) {
+      alert('Erro ao excluir credencial: ' + err.message);
     }
   };
 
