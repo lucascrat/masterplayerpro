@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#1e192b",
+                    "on-background": "#e8def8",
+                    "on-primary-fixed": "#251530",
+                    "inverse-surface": "#e8def8",
+                    "secondary-container": "#00f1fe",
+                    "primary": "#d7bee2",
+                    "surface-bright": "#3c364a",
+                    "on-primary-fixed-variant": "#52405d",
+                    "on-secondary": "#00363a",
+                    "surface-container-high": "#2c273a",
+                    "primary-fixed": "#f4daff",
+                    "primary-fixed-dim": "#d7bee2",
+                    "error": "#ffb4ab",
+                    "on-error": "#690005",
+                    "outline": "#968e96",
+                    "background": "#151022",
+                    "surface-container-lowest": "#100b1d",
+                    "on-primary-container": "#857090",
+                    "on-tertiary-fixed-variant": "#5700c9",
+                    "inverse-on-surface": "#332d41",
+                    "surface": "#151022",
+                    "on-secondary-fixed": "#002022",
+                    "primary-container": "#0d0118",
+                    "surface-tint": "#d7bee2",
+                    "on-secondary-fixed-variant": "#004f54",
+                    "surface-variant": "#373246",
+                    "secondary-fixed-dim": "#00dbe7",
+                    "surface-container-highest": "#373246",
+                    "on-primary": "#3b2a46",
+                    "surface-container": "#221d2f",
+                    "tertiary-fixed-dim": "#d1bcff",
+                    "on-error-container": "#ffdad6",
+                    "surface-dim": "#151022",
+                    "on-tertiary-container": "#8a52ff",
+                    "secondary-fixed": "#74f5ff",
+                    "on-tertiary-fixed": "#23005b",
+                    "on-tertiary": "#3c0090",
+                    "on-surface": "#e8def8",
+                    "on-surface-variant": "#cdc4cc",
+                    "outline-variant": "#4b454c",
+                    "tertiary": "#d1bcff",
+                    "tertiary-fixed": "#e9ddff",
+                    "tertiary-container": "#090022",
+                    "secondary": "#ddfcff",
+                    "on-secondary-container": "#006a70",
+                    "error-container": "#93000a",
+                    "inverse-primary": "#6b5776"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "margin": "20px",
+                    "lg": "40px",
+                    "base": "8px",
+                    "xl": "64px",
+                    "xs": "4px",
+                    "md": "24px",
+                    "sm": "12px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Be Vietnam Pro"],
+                    "body-md": ["Be Vietnam Pro"],
+                    "currency-display": ["Space Grotesk"],
+                    "headline-lg": ["Space Grotesk"],
+                    "label-bold": ["Space Grotesk"],
+                    "headline-md": ["Space Grotesk"],
+                    "display-xl": ["Space Grotesk"]
+            },
+            "fontSize": {
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "currency-display": ["40px", {"lineHeight": "1.0", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-bold": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display-xl": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(25, 10, 45, 0.7);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(215, 190, 226, 0.2);
+            border-left: 1px solid rgba(215, 190, 226, 0.2);
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+        }
+        .neon-border-active {
+            border: 1px solid #00f1fe;
+            box-shadow: 0 0 10px rgba(0, 241, 254, 0.3);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #151022;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d1bcff;
+            border-radius: 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-32">
+<!-- TopAppBar Shell -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-[#0D0118]/80 backdrop-blur-[20px] border-b border-violet-400/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full border-2 border-secondary-container overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="Close up portrait of a futuristic cyberpunk gamer with neon facial markings and sleek chrome headset" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaswZGG27tF6kMZMNuTLGP0C6U-DeZ0ufwe_d2hEBJBc1evNBf_bmhPuEVWBg8TZtGpHnYbWZJLsLIZSZzAPMmLKpV54ZompxZUIqodyibCVqytbASxeHWZ_mkISz3_y7pw2_U8F4s5xQ_aEZ9SKcWdH5PBrNaPgR7RW5M4eU3MRFAIUIcW-9bgQwcZ4BWAVSuXfm5odmDBswi5KUcPpBPWKeVM6FBOkfRnRis2hDkmWRE-zaZwy_SNY2K4tdVd9Um2hmIortAHZ8"/>
+</div>
+<span class="font-['Space_Grotesk'] font-black text-2xl tracking-wider text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">KRATOR+</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-cyan-400 hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+</button>
+</div>
+</header>
+<main class="pt-24 px-margin max-w-5xl mx-auto space-y-lg">
+<!-- Profile Hero Section -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<div class="md:col-span-8 glass-panel p-md rounded-xl flex flex-col md:flex-row items-center gap-md">
+<div class="relative">
+<div class="w-32 h-32 rounded-full border-4 border-secondary-container p-1 shadow-[0_0_30px_rgba(0,241,254,0.3)]">
+<img alt="User Avatar" class="w-full h-full rounded-full object-cover" data-alt="High quality 3D render avatar of a professional esports athlete with sleek purple lighting and digital armor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmrcPSDJuCGoewbu2fYG-KRyKeYXyJ3EYRvTsc1G_RzxuYBflzmf0aLO5EfxAZFZdMIRGcrdzYdbDLj_1_sUhN5qIOlxvjfuzUXM2U0JblIsE_nzQcqJ1R-97-pbMQ3hKBsITerzQucG1g68n-tTvVWJefUefzIk_1q3mcm0Gv0-362vEPW34OkvnahVTX-RNZKRrJWuTXqDRfDpmjLajPblsL8MX0kXoDP3Bxo71Fwf3a1h_ASsluewERscXTbKkVw2md21-u2oA"/>
+</div>
+<div class="absolute bottom-1 right-1 bg-secondary-container text-on-secondary w-8 h-8 rounded-full flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+</div>
+</div>
+<div class="text-center md:text-left">
+<h1 class="font-headline-lg text-headline-lg text-on-background">Vesper_Protocol</h1>
+<p class="text-on-surface-variant font-body-md mb-4 italic">Elite Voyager • Rank #422</p>
+<div class="flex flex-wrap gap-sm justify-center md:justify-start">
+<span class="bg-primary-container text-cyan-400 border border-cyan-400/30 px-3 py-1 rounded-full text-label-bold font-label-bold">LEGENDARY TIER</span>
+<span class="bg-surface-container-high text-tertiary px-3 py-1 rounded-full text-label-bold font-label-bold uppercase">Active Member</span>
+</div>
+</div>
+</div>
+<!-- Currency Widget -->
+<div class="md:col-span-4 glass-panel p-md rounded-xl flex flex-col justify-between border-secondary-container/20 neon-glow-cyan bg-gradient-to-br from-primary-container to-surface-container-lowest">
+<div class="flex justify-between items-start">
+<span class="text-label-bold font-label-bold text-cyan-400 uppercase tracking-widest">K+ Balance</span>
+<span class="material-symbols-outlined text-cyan-400" data-icon="token">token</span>
+</div>
+<div class="mt-4">
+<div class="flex items-baseline gap-2">
+<span class="font-currency-display text-currency-display text-on-background">42,850</span>
+<span class="font-label-bold text-cyan-400">COINS</span>
+</div>
+<p class="text-[12px] text-on-surface-variant mt-2">+1,200 earned this week</p>
+</div>
+<div class="mt-4 w-full bg-surface-container-highest rounded-full h-2 overflow-hidden">
+<div class="h-full bg-gradient-to-r from-tertiary to-secondary-container w-[75%]"></div>
+</div>
+<p class="text-[10px] text-right mt-1 text-on-surface-variant uppercase tracking-tighter">7,150 to Platinum Upgrade</p>
+</div>
+</section>
+<!-- Bento Layout: History & Gift Cards -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Earned History -->
+<div class="md:col-span-5 glass-panel p-md rounded-xl space-y-md">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-md text-headline-md text-on-background">Earnings</h2>
+<span class="text-cyan-400 font-label-bold text-label-bold cursor-pointer hover:underline">VIEW ALL</span>
+</div>
+<div class="space-y-sm max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="sports_esports">sports_esports</span>
+</div>
+<div>
+<p class="font-label-bold text-on-background">Daily Streak</p>
+<p class="text-[12px] text-on-surface-variant">2 hours ago</p>
+</div>
+</div>
+<span class="text-cyan-400 font-label-bold">+500</span>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="shopping_cart">shopping_cart</span>
+</div>
+<div>
+<p class="font-label-bold text-on-background">Shop Purchase</p>
+<p class="text-[12px] text-on-surface-variant">Yesterday</p>
+</div>
+</div>
+<span class="text-cyan-400 font-label-bold">+2,400</span>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</div>
+<div>
+<p class="font-label-bold text-on-background">Referral Bonus</p>
+<p class="text-[12px] text-on-surface-variant">3 days ago</p>
+</div>
+</div>
+<span class="text-cyan-400 font-label-bold">+10,000</span>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="workspace_premium">workspace_premium</span>
+</div>
+<div>
+<p class="font-label-bold text-on-background">Monthly Reward</p>
+<p class="text-[12px] text-on-surface-variant">Oct 01, 2023</p>
+</div>
+</div>
+<span class="text-cyan-400 font-label-bold">+5,000</span>
+</div>
+</div>
+</div>
+<!-- Redeemed Codes -->
+<div class="md:col-span-7 glass-panel p-md rounded-xl space-y-md">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-md text-headline-md text-on-background">Redeemed Codes</h2>
+<span class="material-symbols-outlined text-tertiary" data-icon="confirmation_number">confirmation_number</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+<!-- Reward Card 1 -->
+<div class="relative overflow-hidden p-4 rounded-xl border border-white/10 bg-gradient-to-br from-surface-container-highest to-surface-container-low group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded bg-black/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary-container" data-icon="card_giftcard">card_giftcard</span>
+</div>
+<span class="text-label-bold font-label-bold text-tertiary-fixed-dim">$50 USD</span>
+</div>
+<p class="text-label-bold text-on-background mb-1">PlayStation Store</p>
+<div class="bg-black/50 p-2 rounded flex justify-between items-center border border-secondary-container/20">
+<code class="font-mono text-cyan-400 text-sm">A7X-99RT-KLP2</code>
+<span class="material-symbols-outlined text-sm cursor-pointer hover:text-cyan-400" data-icon="content_copy">content_copy</span>
+</div>
+<p class="text-[10px] mt-2 text-on-surface-variant italic">Redeemed: Oct 12, 2023</p>
+</div>
+<!-- Reward Card 2 -->
+<div class="relative overflow-hidden p-4 rounded-xl border border-white/10 bg-gradient-to-br from-surface-container-highest to-surface-container-low group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded bg-black/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary-container" data-icon="card_giftcard">card_giftcard</span>
+</div>
+<span class="text-label-bold font-label-bold text-tertiary-fixed-dim">$20 USD</span>
+</div>
+<p class="text-label-bold text-on-background mb-1">Steam Wallet</p>
+<div class="bg-black/50 p-2 rounded flex justify-between items-center border border-secondary-container/20">
+<code class="font-mono text-cyan-400 text-sm">GAB-ENNN-ST88</code>
+<span class="material-symbols-outlined text-sm cursor-pointer hover:text-cyan-400" data-icon="content_copy">content_copy</span>
+</div>
+<p class="text-[10px] mt-2 text-on-surface-variant italic">Redeemed: Sep 28, 2023</p>
+</div>
+</div>
+<div class="pt-4 mt-auto border-t border-white/5">
+<button class="w-full bg-secondary-container text-on-secondary font-label-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:brightness-110 transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+                        BROWSE REWARD SHOP
+                    </button>
+</div>
+</div>
+</section>
+<!-- Settings Section -->
+<section class="space-y-md">
+<h2 class="font-headline-md text-headline-md text-on-background flex items-center gap-2 px-2">
+<span class="material-symbols-outlined text-cyan-400" data-icon="settings">settings</span>
+                App Settings
+            </h2>
+<div class="glass-panel rounded-xl divide-y divide-white/5">
+<!-- Notification Toggle -->
+<div class="flex items-center justify-between p-md">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-on-background">Push Notifications</p>
+<p class="text-body-md text-on-surface-variant">Reward alerts and tier updates</p>
+</div>
+</div>
+<!-- Custom Toggle -->
+<div class="w-12 h-6 rounded-full bg-secondary-container p-1 flex justify-end cursor-pointer">
+<div class="w-4 h-4 rounded-full bg-on-secondary"></div>
+</div>
+</div>
+<!-- Account Management -->
+<div class="flex items-center justify-between p-md hover:bg-white/5 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="person_outline">person_outline</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-on-background">Account Details</p>
+<p class="text-body-md text-on-surface-variant">Update email and password</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Privacy -->
+<div class="flex items-center justify-between p-md hover:bg-white/5 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-on-background">Privacy &amp; Security</p>
+<p class="text-body-md text-on-surface-variant">Manage 2FA and sessions</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Log Out -->
+<div class="flex items-center justify-between p-md hover:bg-error-container/20 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-error-container/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-error">Terminate Session</p>
+<p class="text-body-md text-error/60">Log out of KRATOR+ on this device</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-error/40" data-icon="power_settings_new">power_settings_new</span>
+</div>
+</div>
+</section>
+<!-- Aesthetic Milestone Marker -->
+<div class="flex justify-center items-center py-lg">
+<div class="w-px h-24 bg-gradient-to-b from-cyan-400/0 via-cyan-400 to-cyan-400/0"></div>
+<div class="mx-6 p-4 border border-cyan-400/30 rounded-full bg-black/40 backdrop-blur-xl">
+<span class="material-symbols-outlined text-cyan-400 text-3xl" data-icon="diamond" data-weight="fill">diamond</span>
+</div>
+<div class="w-px h-24 bg-gradient-to-b from-cyan-400/0 via-cyan-400 to-cyan-400/0"></div>
+</div>
+</main>
+<!-- BottomNavBar Shell -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-[#0D0118]/80 backdrop-blur-[20px] border-t border-violet-400/20 rounded-t-2xl shadow-[0_-10px_25px_rgba(13,1,24,0.8)]">
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Videos</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Shop</span>
+</a>
+<!-- ACTIVE TAB: Profile -->
+<a class="flex flex-col items-center justify-center text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] bg-violet-900/30 rounded-xl px-4 py-1 scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

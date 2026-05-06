@@ -3,13 +3,16 @@ import type { M3UItem } from '../../types';
 import { groupByCategory } from '../../utils';
 
 interface LiveTvPageProps {
+  title?: string;
   items: M3UItem[];
   onBack: () => void;
   onPlay: (url: string) => void;
   onSearch?: () => void;
+  favorites?: any[];
+  onToggleFavorite?: (item: M3UItem) => void;
 }
 
-export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPageProps) {
+export default function LiveTvPage({ title = 'TV ao Vivo', items, onBack, onPlay, onSearch, favorites = [], onToggleFavorite }: LiveTvPageProps) {
   const groups = groupByCategory(items);
   const categories = Object.keys(groups);
   const [selectedCat, setSelectedCat] = useState(categories[0] || '');
@@ -20,7 +23,7 @@ export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPa
     <div className="content-page">
       <div className="content-header">
         <button className="back-btn" onClick={onBack}>←</button>
-        <h1>TV ao Vivo</h1>
+        <h1>{title}</h1>
         <span className="count">{items.length} canais</span>
         {onSearch && (
           <button className="topbar-search-btn" onClick={onSearch} title="Buscar (/)">🔍</button>
@@ -61,6 +64,14 @@ export default function LiveTvPage({ items, onBack, onPlay, onSearch }: LiveTvPa
                   <div className="channel-name">{item.name}</div>
                   <div className="channel-group">{item.group}</div>
                 </div>
+                {onToggleFavorite && (
+                  <button 
+                    className={`fav-btn ${favorites.some(f => f.itemName === item.name && f.itemType === item.type) ? 'active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(item); }}
+                  >
+                    ❤️
+                  </button>
+                )}
               </div>
             ))
           )}

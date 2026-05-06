@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useClock } from './hooks/useClock';
-import type { PlaylistData, Page, AuthSession } from './types';
+import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
+import { generateMAC } from './utils';
 
 // Pages
 import LoginScreen from './pages/client/LoginScreen';
@@ -27,6 +28,9 @@ export default function App() {
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+
+  const deviceId = generateMAC();
 
   const doLogin = async (username: string, password: string, existingSessionId?: string): Promise<boolean> => {
     try {
@@ -121,6 +125,45 @@ export default function App() {
       setCurrentPage('login');
     }
   }, []);
+
+  const fetchFavorites = useCallback(async () => {
+    if (!session && currentPage === 'login') return;
+    try {
+      const params: any = {};
+      if (session?.userId) params.appUserId = session.userId;
+      else params.deviceId = deviceId;
+
+      const res = await axios.get(`${API_BASE}/favorites`, { params });
+      setFavorites(res.data);
+    } catch (err) {
+      console.error('Failed to fetch favorites');
+    }
+  }, [session, deviceId, currentPage]);
+
+  useEffect(() => {
+    if (currentPage !== 'loading' && currentPage !== 'login') {
+      fetchFavorites();
+    }
+  }, [currentPage, fetchFavorites]);
+
+  const toggleFavorite = async (item: M3UItem) => {
+    try {
+      const payload: any = {
+        itemName: item.name,
+        itemType: item.type,
+        itemGroup: item.group,
+        itemLogo: item.logo,
+        itemUrl: item.url,
+      };
+      if (session?.userId) payload.appUserId = session.userId;
+      else payload.deviceId = deviceId;
+
+      await axios.post(`${API_BASE}/favorites/toggle`, payload);
+      fetchFavorites();
+    } catch (err) {
+      alert('Erro ao atualizar favoritos');
+    }
+  };
 
   // Auto-logout when a reward-code session expires (accessUntil reached)
   useEffect(() => {
@@ -225,19 +268,65 @@ export default function App() {
       )}
 
       {currentPage === 'livetv' && (
-        <LiveTvPage items={playlist?.live || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
+        <LiveTvPage 
+          items={playlist?.live || []} 
+          onBack={handleBack} 
+          onPlay={setPlayingUrl} 
+          onSearch={goSearch}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
       )}
 
       {currentPage === 'movies' && (
-        <MovieGridPage title="Filmes" items={playlist?.movies || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
+        <MovieGridPage 
+          title="Filmes" 
+          items={playlist?.movies || []} 
+          onBack={handleBack} 
+          onPlay={setPlayingUrl} 
+          onSearch={goSearch}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
       )}
 
       {currentPage === 'series' && (
-        <MovieGridPage title="Séries" items={playlist?.series || []} onBack={handleBack} onPlay={setPlayingUrl} onSearch={goSearch} />
+        <MovieGridPage 
+          title="Séries" 
+          items={playlist?.series || []} 
+          onBack={handleBack} 
+          onPlay={setPlayingUrl} 
+          onSearch={goSearch}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
+
+      {currentPage === 'favorites' && (
+        <LiveTvPage 
+          title="Favoritos"
+          items={favorites.map(f => ({ 
+            name: f.itemName, 
+            type: f.itemType, 
+            group: f.itemGroup || 'Favoritos', 
+            logo: f.itemLogo || '', 
+            url: f.itemUrl 
+          }))}
+          onBack={handleBack}
+          onPlay={setPlayingUrl}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
       )}
 
       {currentPage === 'search' && (
-        <SearchPage playlist={playlist} onBack={handleBack} onPlay={setPlayingUrl} />
+        <SearchPage 
+          playlist={playlist} 
+          onBack={handleBack} 
+          onPlay={setPlayingUrl}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
       )}
 
       {currentPage === 'settings' && (

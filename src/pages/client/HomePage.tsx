@@ -14,6 +14,7 @@ export default function HomePage({ clock, mac, device, onNavigate }: HomePagePro
     { label: 'TV ao Vivo', icon: '📺', page: 'livetv' as Page },
     { label: 'Filmes', icon: '🎬', page: 'movies' as Page },
     { label: 'Séries', icon: '🎭', page: 'series' as Page },
+    { label: 'Favoritos', icon: '❤️', page: 'favorites' as Page },
     { label: 'Replay', icon: '⏪', page: 'home' as Page },
     { label: 'Buscar', icon: '🔍', page: 'search' as Page },
     { label: 'Configurações', icon: '⚙️', page: 'settings' as Page },

@@ -86,7 +86,7 @@ export default function AdminUsers({
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, minWidth: 150 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Usuario</label>
-              <input className="admin-input" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="maria" />
+              <input className="admin-input" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value.toLowerCase() })} placeholder="maria" />
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Senha</label>

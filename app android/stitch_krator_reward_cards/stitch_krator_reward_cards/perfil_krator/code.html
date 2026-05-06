@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#574500",
+                    "surface-bright": "#3c3457",
+                    "inverse-primary": "#6d3bd7",
+                    "on-primary": "#3c0091",
+                    "on-error": "#690005",
+                    "tertiary-fixed": "#ffd9e4",
+                    "on-surface-variant": "#cbc3d7",
+                    "tertiary-fixed-dim": "#ffb0cd",
+                    "secondary-fixed": "#ffe083",
+                    "inverse-surface": "#e7deff",
+                    "on-tertiary-fixed-variant": "#8c0053",
+                    "on-tertiary": "#640039",
+                    "surface": "#150e2e",
+                    "secondary-container": "#eec200",
+                    "on-secondary": "#3c2f00",
+                    "primary": "#d0bcff",
+                    "surface-container-lowest": "#100829",
+                    "outline-variant": "#494454",
+                    "on-primary-fixed-variant": "#5516be",
+                    "tertiary-container": "#f751a1",
+                    "on-primary-container": "#340080",
+                    "on-secondary-container": "#645000",
+                    "tertiary": "#ffb0cd",
+                    "secondary-fixed-dim": "#eec200",
+                    "on-primary-fixed": "#23005c",
+                    "surface-container": "#221a3b",
+                    "inverse-on-surface": "#332b4d",
+                    "on-tertiary-container": "#570032",
+                    "surface-container-high": "#2c2546",
+                    "primary-container": "#a078ff",
+                    "on-error-container": "#ffdad6",
+                    "primary-fixed-dim": "#d0bcff",
+                    "surface-dim": "#150e2e",
+                    "on-tertiary-fixed": "#3e0022",
+                    "secondary": "#ffe083",
+                    "surface-container-highest": "#373052",
+                    "error-container": "#93000a",
+                    "outline": "#958ea0",
+                    "on-surface": "#e7deff",
+                    "surface-variant": "#373052",
+                    "on-background": "#e7deff",
+                    "primary-fixed": "#e9ddff",
+                    "error": "#ffb4ab",
+                    "on-secondary-fixed": "#231b00",
+                    "background": "#150e2e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-md": "12px",
+                    "container-margin": "24px",
+                    "section-gap": "40px",
+                    "gutter": "16px",
+                    "unit": "8px",
+                    "stack-lg": "24px",
+                    "stack-sm": "4px"
+            },
+            "fontFamily": {
+                    "label-md": ["Space Grotesk"],
+                    "display-lg": ["Space Grotesk"],
+                    "body-lg": ["Space Grotesk"],
+                    "headline-md": ["Space Grotesk"],
+                    "headline-lg": ["Space Grotesk"],
+                    "body-md": ["Space Grotesk"]
+            },
+            "fontSize": {
+                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(21, 14, 46, 0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            border-left: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .neon-glow-violet {
+            filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.4));
+        }
+        .neon-glow-yellow {
+            filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.6));
+        }
+        .bg-mesh {
+            background-color: #150e2e;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(109, 59, 215, 0.2) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(247, 81, 161, 0.15) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(21, 14, 46, 1) 0px, transparent 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-mesh min-h-screen text-on-surface font-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-4 bg-slate-950/40 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<div class="flex items-center gap-4">
+<div class="relative">
+<div class="w-10 h-10 rounded-full border-2 border-primary neon-glow-violet overflow-hidden">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="close-up 3D stylized avatar of a young gamer with purple hair and high-tech glasses on a dark purple background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMxYx6Qn9DFU6bpLzsvc_eo5lQZOLFCWDAkWU81XHaqcWjt0m3r_DyQGmjLsScVB3Hco3YL21udjrVvoZvzTEjMQdsZ-uFKqgNds_QCVwfUkObpwkOdhvdHcxngDZMqJWjtFokAs8bzLGHDXJraWX70UCtDD9zBFbcegJrLK3gToQQMi11cW19BsEpNnjBmrc3ezbqphIBOgUUxpiPRJrlT23G6uaFrBLFYzyFxjZKkyavrYgRQfmTdvmUk97t8tc0kwtQnHlzVtk"/>
+</div>
+</div>
+<span class="text-xl font-black bg-gradient-to-r from-violet-400 to-fuchsia-500 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(167,139,250,0.5)] font-['Space_Grotesk'] tracking-wider">Krator+</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
+<span class="material-symbols-outlined text-secondary text-sm neon-glow-yellow" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="font-['Space_Grotesk'] font-bold text-secondary">1.250 ●</span>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-section-gap">
+<!-- User Identity Section -->
+<section class="flex flex-col items-center text-center space-y-stack-md">
+<div class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-tr from-primary to-tertiary rounded-full blur opacity-40 group-hover:opacity-75 transition duration-1000"></div>
+<div class="relative w-28 h-28 rounded-full border-4 border-surface p-1 bg-surface-container">
+<img alt="Profile" class="w-full h-full rounded-full object-cover" data-alt="High quality 3d stylized character profile picture with neon lighting and techwear aesthetics" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTlLpEBXFJ5Ktkmwg4ah6EMQt8yWkDeQkp8GvYhryh14oPBtaLGy7UE-fuWxa4fMiNBUYrhL_55W2_SuohzNdj6f4FNhDqBS2OwE9fpY--djY4LoWZFxET6t9g350UNTrfUs59vGZ5eFet18J2sXZNuRwqdK_zWl5Lv-Oj5WihIVolTKkO0SCGyDP8kSQtvcCQLgVj2LGMPB0HC5PQ2sjAH0yPXW60svnGMTLyVfa93T5Vi6GQLOJR9cx4dfQFFkmr9uyKwhBebLU"/>
+<div class="absolute bottom-0 right-0 bg-secondary p-1.5 rounded-full border-2 border-surface shadow-lg">
+<span class="material-symbols-outlined text-surface text-sm font-bold">edit</span>
+</div>
+</div>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg text-white">Alexandre Krator</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">@alex_vanguard • Nível 24</p>
+</div>
+</section>
+<!-- Stats Grid (Bento Style) -->
+<section class="grid grid-cols-2 gap-gutter">
+<div class="glass-panel p-stack-lg rounded-xl flex flex-col items-start space-y-stack-sm">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Total Ganhos</span>
+<span class="font-headline-md text-headline-md text-secondary neon-glow-yellow">12.450</span>
+</div>
+<div class="glass-panel p-stack-lg rounded-xl flex flex-col items-start space-y-stack-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">redeem</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Gift Cards</span>
+<span class="font-headline-md text-headline-md text-primary neon-glow-violet">08</span>
+</div>
+</section>
+<!-- Earn History -->
+<section class="space-y-stack-lg">
+<div class="flex justify-between items-end">
+<h2 class="font-headline-md text-headline-md text-white px-2">Histórico de Ganhos</h2>
+<span class="font-label-md text-label-md text-primary cursor-pointer hover:underline">Ver tudo</span>
+</div>
+<div class="space-y-stack-md">
+<div class="glass-panel p-4 rounded-xl flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="bg-primary/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-primary">play_circle</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-white">Assistiu Vídeo Diário</p>
+<p class="text-[12px] text-on-surface-variant">Hoje, 14:20</p>
+</div>
+</div>
+<span class="font-label-md text-secondary font-bold">+50</span>
+</div>
+<div class="glass-panel p-4 rounded-xl flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="bg-primary/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-primary">sports_esports</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-white">Missão: Ninja Krator</p>
+<p class="text-[12px] text-on-surface-variant">Ontem, 21:05</p>
+</div>
+</div>
+<span class="font-label-md text-secondary font-bold">+200</span>
+</div>
+</div>
+</section>
+<!-- Redeemed Gift Cards -->
+<section class="space-y-stack-lg">
+<h2 class="font-headline-md text-headline-md text-white px-2">Meus Códigos</h2>
+<div class="flex overflow-x-auto gap-gutter pb-4 no-scrollbar">
+<div class="min-w-[280px] glass-panel p-stack-lg rounded-xl space-y-stack-md relative overflow-hidden">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
+<div class="flex justify-between items-start">
+<span class="font-label-md text-white font-bold">Steam R$ 50</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">info</span>
+</div>
+<div class="bg-surface-container-highest/50 border border-dashed border-primary/30 p-3 rounded-lg flex justify-between items-center">
+<code class="text-primary font-mono font-bold tracking-widest">KRT-X92-LWQ</code>
+<span class="material-symbols-outlined text-primary text-sm cursor-pointer">content_copy</span>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Resgatado em 12 Out 2023</p>
+</div>
+<div class="min-w-[280px] glass-panel p-stack-lg rounded-xl space-y-stack-md relative overflow-hidden">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-tertiary/10 rounded-full blur-2xl"></div>
+<div class="flex justify-between items-start">
+<span class="font-label-md text-white font-bold">Google Play R$ 30</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">info</span>
+</div>
+<div class="bg-surface-container-highest/50 border border-dashed border-primary/30 p-3 rounded-lg flex justify-between items-center">
+<code class="text-primary font-mono font-bold tracking-widest">GP-772-HNK-9</code>
+<span class="material-symbols-outlined text-primary text-sm cursor-pointer">content_copy</span>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Resgatado em 05 Set 2023</p>
+</div>
+</div>
+</section>
+<!-- App Settings -->
+<section class="space-y-stack-lg">
+<h2 class="font-headline-md text-headline-md text-white px-2">Configurações</h2>
+<div class="glass-panel rounded-2xl overflow-hidden divide-y divide-white/5">
+<div class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">notifications</span>
+<span class="font-body-md text-on-surface">Notificações</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+</div>
+<div class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">security</span>
+<span class="font-body-md text-on-surface">Privacidade e Segurança</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+</div>
+<div class="flex items-center justify-between p-4 hover:bg-white/5 transition-colors cursor-pointer group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">help_center</span>
+<span class="font-body-md text-on-surface">Suporte</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+</div>
+</div>
+</section>
+<!-- Logout Button -->
+<section class="pb-8">
+<button class="w-full py-4 rounded-xl border border-error-container/30 bg-error-container/5 text-error font-headline-md flex items-center justify-center gap-2 hover:bg-error-container/10 transition-all active:scale-95 duration-200">
+<span class="material-symbols-outlined">logout</span>
+                Encerrar Sessão
+            </button>
+<p class="text-center text-[12px] text-on-surface-variant/40 mt-8 font-['Space_Grotesk'] uppercase tracking-[0.2em]">Versão 2.4.0-build.88</p>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-8 bg-slate-950/60 backdrop-blur-2xl rounded-t-3xl border-t border-white/10 shadow-[0_-10px_40px_rgba(139,92,246,0.15)]">
+<div class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all cursor-pointer">
+<span class="material-symbols-outlined">home</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Início</span>
+</div>
+<div class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all cursor-pointer">
+<span class="material-symbols-outlined">play_circle</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Vídeos</span>
+</div>
+<div class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all cursor-pointer">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Loja</span>
+</div>
+<div class="flex flex-col items-center justify-center text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.8)] scale-110 translate-y-[-4px] cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1 font-bold">Perfil</span>
+</div>
+</nav>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>

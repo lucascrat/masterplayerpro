@@ -8,6 +8,8 @@ interface SearchPageProps {
   playlist: PlaylistData | null;
   onBack: () => void;
   onPlay: (url: string) => void;
+  favorites?: any[];
+  onToggleFavorite?: (item: M3UItem) => void;
 }
 
 type FilterType = 'all' | 'live' | 'movie' | 'series';
@@ -204,7 +206,7 @@ function EmptyState({ history, onHistoryClick, onHistoryClear, playlist, onCateg
 }
 
 // ── Main SearchPage ──────────────────────────────────────────────────
-export default function SearchPage({ playlist, onBack, onPlay }: SearchPageProps) {
+export default function SearchPage({ playlist, onBack, onPlay, favorites = [], onToggleFavorite }: SearchPageProps) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedMovie, setSelectedMovie] = useState<M3UItem | null>(null);
@@ -413,6 +415,8 @@ export default function SearchPage({ playlist, onBack, onPlay }: SearchPageProps
           item={selectedMovie}
           onPlay={(url) => { setSelectedMovie(null); onPlay(url); }}
           onClose={() => setSelectedMovie(null)}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       )}
 
@@ -423,6 +427,8 @@ export default function SearchPage({ playlist, onBack, onPlay }: SearchPageProps
           episodes={selectedShow.episodes}
           onPlay={(url) => { setSelectedShow(null); onPlay(url); }}
           onClose={() => setSelectedShow(null)}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       )}
     </div>

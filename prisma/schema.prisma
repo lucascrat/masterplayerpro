@@ -21,6 +21,7 @@ model Device {
 
   playlist    Playlist? @relation(fields: [playlistId], references: [id])
   favorites   Favorite[]
+  userFavorites UserFavorite[]
   watchHistory WatchHistory[]
 
   @@map("devices")
@@ -87,6 +88,7 @@ model AppUser {
 
   leases    CredentialLease[]
   reward    RewardUser?
+  favorites UserFavorite[]
 
   @@map("app_users")
 }
@@ -395,4 +397,23 @@ model WatchHistory {
   series Series? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@map("watch_history")
+}
+
+model UserFavorite {
+  id        String   @id @default(uuid())
+  appUserId String?
+  deviceId  String?
+  itemName  String
+  itemType  String   // 'live', 'movie', 'series'
+  itemGroup String?
+  itemLogo  String?
+  itemUrl   String
+  createdAt DateTime @default(now())
+
+  appUser   AppUser? @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  device    Device?  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([appUserId, itemName, itemType])
+  @@unique([deviceId, itemName, itemType])
+  @@map("user_favorites")
 }

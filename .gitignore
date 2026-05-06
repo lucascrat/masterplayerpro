@@ -29,3 +29,7 @@ dist-ssr
 .env.production
 
 /src/generated/prisma
+
+# Android secrets
+*.jks
+keystore.properties

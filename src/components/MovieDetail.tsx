@@ -17,9 +17,11 @@ interface MovieDetailProps {
   item: M3UItem;
   onPlay: (url: string) => void;
   onClose: () => void;
+  favorites?: any[];
+  onToggleFavorite?: (item: M3UItem) => void;
 }
 
-export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps) {
+export default function MovieDetail({ item, onPlay, onClose, favorites = [], onToggleFavorite }: MovieDetailProps) {
   const [tmdb, setTmdb] = useState<TMDBData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -150,6 +152,15 @@ export default function MovieDetail({ item, onPlay, onClose }: MovieDetailProps)
             >
               ▶ Assistir
             </button>
+            {onToggleFavorite && (
+              <button 
+                className={`fav-btn ${favorites.some(f => f.itemName === item.name && f.itemType === item.type) ? 'active' : ''}`}
+                onClick={() => onToggleFavorite(item)}
+                style={{ marginTop: '0.5rem', opacity: 1, filter: 'none', background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '12px 20px', fontSize: '1rem' }}
+              >
+                {favorites.some(f => f.itemName === item.name && f.itemType === item.type) ? '❤️ Favorito' : '🤍 Favoritar'}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -12,6 +12,15 @@ export interface PlaylistData {
   series: M3UItem[];
 }
 
+export interface Favorite {
+  id: string;
+  itemName: string;
+  itemType: 'live' | 'movie' | 'series';
+  itemGroup?: string;
+  itemLogo?: string;
+  itemUrl: string;
+}
+
 export interface DeviceInfo {
   id: string;
   macAddress: string;
@@ -31,4 +40,4 @@ export interface AuthSession {
   coins?: number;
 }
 
-export type Page = 'loading' | 'login' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings';
+export type Page = 'loading' | 'login' | 'home' | 'livetv' | 'movies' | 'series' | 'search' | 'settings' | 'favorites';

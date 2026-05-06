@@ -432,6 +432,19 @@ h1, h2, h3, h4 {
   font-weight: 500;
 }
 
+.fav-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: all 0.2s;
+  filter: grayscale(1);
+}
+.fav-btn:hover { opacity: 0.8; transform: scale(1.2); }
+.fav-btn.active { opacity: 1; filter: grayscale(0); }
+
 /* ==========================================
    NETFLIX-STYLE MOVIE / SERIES PAGE
    ========================================== */

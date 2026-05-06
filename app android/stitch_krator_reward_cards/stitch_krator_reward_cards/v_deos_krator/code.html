@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#574500",
+                        "surface-bright": "#3c3457",
+                        "inverse-primary": "#6d3bd7",
+                        "on-primary": "#3c0091",
+                        "on-error": "#690005",
+                        "tertiary-fixed": "#ffd9e4",
+                        "on-surface-variant": "#cbc3d7",
+                        "tertiary-fixed-dim": "#ffb0cd",
+                        "secondary-fixed": "#ffe083",
+                        "inverse-surface": "#e7deff",
+                        "on-tertiary-fixed-variant": "#8c0053",
+                        "on-tertiary": "#640039",
+                        "surface": "#150e2e",
+                        "secondary-container": "#eec200",
+                        "on-secondary": "#3c2f00",
+                        "primary": "#d0bcff",
+                        "surface-container-lowest": "#100829",
+                        "outline-variant": "#494454",
+                        "on-primary-fixed-variant": "#5516be",
+                        "tertiary-container": "#f751a1",
+                        "on-primary-container": "#340080",
+                        "on-secondary-container": "#645000",
+                        "tertiary": "#ffb0cd",
+                        "secondary-fixed-dim": "#eec200",
+                        "on-primary-fixed": "#23005c",
+                        "surface-container": "#221a3b",
+                        "inverse-on-surface": "#332b4d",
+                        "on-tertiary-container": "#570032",
+                        "surface-container-high": "#2c2546",
+                        "primary-container": "#a078ff",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#d0bcff",
+                        "surface-dim": "#150e2e",
+                        "on-tertiary-fixed": "#3e0022",
+                        "secondary": "#ffe083",
+                        "surface-container-highest": "#373052",
+                        "error-container": "#93000a",
+                        "outline": "#958ea0",
+                        "on-surface": "#e7deff",
+                        "surface-container-low": "#1e1637",
+                        "surface-tint": "#d0bcff",
+                        "surface-variant": "#373052",
+                        "on-background": "#e7deff",
+                        "primary-fixed": "#e9ddff",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#231b00",
+                        "background": "#150e2e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-md": "12px",
+                        "container-margin": "24px",
+                        "section-gap": "40px",
+                        "gutter": "16px",
+                        "unit": "8px",
+                        "stack-lg": "24px",
+                        "stack-sm": "4px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "body-lg": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"],
+                        "headline-lg": ["Space Grotesk"],
+                        "body-md": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #150e2e;
+            background-image: radial-gradient(circle at 50% -20%, #3c0091 0%, #150e2e 70%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .neon-glow-purple {
+            box-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
+        }
+        .neon-glow-yellow {
+            box-shadow: 0 0 25px rgba(250, 204, 21, 0.4);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-background selection:bg-primary-container selection:text-on-primary-container pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-slate-950/40 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-6 py-4 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full border-2 border-primary/30 overflow-hidden">
+<img alt="Foto de perfil do usuário" class="w-full h-full object-cover" data-alt="Close-up portrait of a young man with a slight smile, studio lighting with purple and blue rim light, high tech aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9g-Ypw--fcvPYl8wm2SXLwvdZPXTIufbwWn0Dxfi0xNUgJ6vPi2yZ6D_APCaPhAbSKE-PnvNu1uWqGCI1DsPLtd7cjQ0ZgWUtlCX3PJtIyXUigo1Orj1hB9oi1f0v3omJPgIHfNW0bvBCX-Uks433qctERvPhJeWyjwSAnXhY2Ztk3GYxetIAx9TCJAZ0LCXbkG3NXZfSuRzJ-CHkK7MS0mmDrBUGqeWJd3RILT6NeiJENHAkDg5AjwXo_koIn7Ep4kHXkRg6Rns"/>
+</div>
+<span class="font-['Space_Grotesk'] font-black text-xl bg-gradient-to-r from-violet-400 to-fuchsia-500 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(167,139,250,0.5)] tracking-wider">Krator+</span>
+</div>
+<div class="flex items-center bg-white/5 rounded-full px-4 py-1.5 border border-white/10">
+<span class="text-yellow-400 font-bold font-label-md">1.250 ●</span>
+</div>
+</header>
+<main class="pt-24 px-container-margin max-w-2xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-section-gap">
+<div class="glass-card rounded-3xl p-stack-lg relative overflow-hidden text-center">
+<div class="absolute -top-10 -right-10 w-40 h-40 bg-primary/20 rounded-full blur-[60px]"></div>
+<div class="absolute -bottom-10 -left-10 w-40 h-40 bg-secondary/10 rounded-full blur-[60px]"></div>
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-20 h-20 bg-primary-container rounded-2xl flex items-center justify-center mb-stack-md neon-glow-purple">
+<span class="material-symbols-outlined text-4xl text-white" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+<h1 class="font-headline-lg text-white mb-stack-sm">Vídeos Premiados</h1>
+<p class="text-on-surface-variant font-body-md max-w-sm">
+                        Assista a vídeos curtos e transforme seu tempo em <span class="text-secondary font-bold">moedas K+</span> instantâneas para resgatar na loja.
+                    </p>
+<button class="mt-stack-lg w-full py-5 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-2xl font-headline-md text-white neon-glow-purple flex items-center justify-center gap-3 active:scale-95 transition-all duration-200">
+<span class="material-symbols-outlined">smart_display</span>
+                        Assistir Vídeo e Ganhar Moedas
+                    </button>
+<div class="mt-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">stars</span>
+<span class="text-secondary font-label-md uppercase tracking-widest text-xs">+50 Moedas por vídeo</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Earnings Info -->
+<section class="mb-section-gap">
+<h2 class="font-headline-md text-white mb-stack-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">info</span>
+                Como funciona
+            </h2>
+<div class="grid grid-cols-1 gap-gutter">
+<div class="glass-card rounded-2xl p-stack-md flex items-center gap-stack-md">
+<div class="bg-surface-container-highest p-3 rounded-xl">
+<span class="material-symbols-outlined text-primary">touch_app</span>
+</div>
+<div>
+<p class="font-label-md text-white">Toque no botão principal</p>
+<p class="text-xs text-on-surface-variant">Inicie a exibição de um anúncio premiado.</p>
+</div>
+</div>
+<div class="glass-card rounded-2xl p-stack-md flex items-center gap-stack-md">
+<div class="bg-surface-container-highest p-3 rounded-xl">
+<span class="material-symbols-outlined text-primary">timer</span>
+</div>
+<div>
+<p class="font-label-md text-white">Assista até o final</p>
+<p class="text-xs text-on-surface-variant">Aguarde a conclusão para validar seu prêmio.</p>
+</div>
+</div>
+<div class="glass-card rounded-2xl p-stack-md flex items-center gap-stack-md">
+<div class="bg-surface-container-highest p-3 rounded-xl">
+<span class="material-symbols-outlined text-secondary">monetization_on</span>
+</div>
+<div>
+<p class="font-label-md text-white">Ganhe 50 Moedas K+</p>
+<p class="text-xs text-on-surface-variant">O saldo é creditado instantaneamente na sua conta.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Upcoming Videos List -->
+<section class="mb-section-gap">
+<div class="flex justify-between items-end mb-stack-md">
+<h2 class="font-headline-md text-white">Próximos Vídeos</h2>
+<span class="text-primary font-label-md text-xs uppercase tracking-tighter">8 disponíveis hoje</span>
+</div>
+<div class="space-y-gutter">
+<!-- Video Item 1 -->
+<div class="glass-card rounded-2xl overflow-hidden flex h-32">
+<div class="w-32 h-full relative">
+<img class="w-full h-full object-cover grayscale opacity-60" data-alt="Digital art of abstract glowing neon geometric shapes in purple and gold, cinematic lighting, 3D render" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp8Ck71rKS61bjGdq8ldZBaJGPhBluAR3A1afnzU_ECKsAkdPLCPXOpj83uvzB88BpWp0vZXfmUnuoQETcdQbouYLg3EGHcrXe-jepRooCWSLL9fE3GRKl2l0XpzR1RXw6gu6OxwniJ84A3ywrSnZQL4DrMF2cxrnOtAnScwh5GmgYcPb1huBeY3tep1M9na5JEOl7o-Mg79J1i0D0wZ1OTSoTR4RzniIfGxaNicbEGBw5RB4FJ_z3m0QscZiSmwUZ2gxidGLBI2M"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-white/50 text-3xl">play_arrow</span>
+</div>
+</div>
+<div class="flex-1 p-stack-md flex flex-col justify-between">
+<div>
+<h3 class="font-label-md text-white">Anúncio de Tecnologia</h3>
+<p class="text-xs text-on-surface-variant line-clamp-1">Descubra as novas tendências mobile.</p>
+</div>
+<div class="flex justify-between items-center">
+<span class="bg-secondary-container/20 text-secondary-container px-2 py-0.5 rounded text-[10px] font-bold uppercase">Disponível</span>
+<div class="flex items-center gap-1">
+<span class="text-secondary font-bold">50</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Video Item 2 -->
+<div class="glass-card rounded-2xl overflow-hidden flex h-32 opacity-70">
+<div class="w-32 h-full relative">
+<img class="w-full h-full object-cover grayscale opacity-60" data-alt="Retro gaming console and computer hardware with colorful neon backlighting on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA80Qoh5x5_LNXeRUiKQiuSBFyFKS06sxOLynBKIHtjzs_auyqgIrouqcVa1XFsG_D_W8IjtNu7qIjD3ofmPtjhWKRXNpAyy8ETGpTV5QSyu3-pwbxR6aC4xe_8kQDUyFu9CvsYkTIVgIu6o7NDukVdCAsbuBKj4U_U-x0rsB6YqAlFAV_nqpm3Qw8pH0hHen8J2mpklDYglVcQrSM-8IHzItkZpE4x1QU534dEMw4mP-w4QUs32gz_XKxznXBIqZur1arVk_zGBtE"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-white/50 text-3xl">lock</span>
+</div>
+</div>
+<div class="flex-1 p-stack-md flex flex-col justify-between">
+<div>
+<h3 class="font-label-md text-white">Trailer de Game</h3>
+<p class="text-xs text-on-surface-variant line-clamp-1">Assista após o primeiro vídeo.</p>
+</div>
+<div class="flex justify-between items-center">
+<span class="bg-white/5 text-white/40 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Bloqueado</span>
+<div class="flex items-center gap-1">
+<span class="text-white/40 font-bold">50</span>
+<span class="material-symbols-outlined text-white/20 text-sm" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Progress Tracker -->
+<section class="mb-section-gap">
+<div class="glass-card rounded-2xl p-stack-md border-primary/20">
+<div class="flex justify-between items-center mb-stack-sm">
+<span class="text-white font-label-md">Meta Diária</span>
+<span class="text-primary font-bold">2 / 5</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 w-[40%] shadow-[0_0_10px_rgba(167,139,250,0.5)]"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-stack-sm text-center">Assista mais 3 vídeos para ganhar um <span class="text-white font-bold">Bônus de 100 Moedas</span></p>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-8 bg-slate-950/60 backdrop-blur-2xl rounded-t-3xl border-t border-white/10 shadow-[0_-10px_40px_rgba(139,92,246,0.15)]">
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all font-['Space_Grotesk'] text-[10px] uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+            Início
+        </a>
+<a class="flex flex-col items-center justify-center text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.8)] scale-110 font-['Space_Grotesk'] text-[10px] uppercase tracking-widest translate-y-[-4px] transition-transform duration-300" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+            Vídeos
+        </a>
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all font-['Space_Grotesk'] text-[10px] uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">shopping_bag</span>
+            Loja
+        </a>
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all font-['Space_Grotesk'] text-[10px] uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+            Perfil
+        </a>
+</nav>
+</body></html>

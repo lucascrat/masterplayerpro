@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(25, 10, 45, 0.7);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(215, 190, 226, 0.2);
+            border-left: 1px solid rgba(215, 190, 226, 0.2);
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+        }
+        .neon-border-cyan {
+            border: 1px solid #22d3ee;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#1e192b",
+                        "on-background": "#e8def8",
+                        "on-primary-fixed": "#251530",
+                        "inverse-surface": "#e8def8",
+                        "secondary-container": "#00f1fe",
+                        "primary": "#d7bee2",
+                        "surface-bright": "#3c364a",
+                        "on-primary-fixed-variant": "#52405d",
+                        "on-secondary": "#00363a",
+                        "surface-container-high": "#2c273a",
+                        "primary-fixed": "#f4daff",
+                        "primary-fixed-dim": "#d7bee2",
+                        "error": "#ffb4ab",
+                        "on-error": "#690005",
+                        "outline": "#968e96",
+                        "background": "#151022",
+                        "surface-container-lowest": "#100b1d",
+                        "on-primary-container": "#857090",
+                        "on-tertiary-fixed-variant": "#5700c9",
+                        "inverse-on-surface": "#332d41",
+                        "surface": "#151022",
+                        "on-secondary-fixed": "#002022",
+                        "primary-container": "#0d0118",
+                        "surface-tint": "#d7bee2",
+                        "on-secondary-fixed-variant": "#004f54",
+                        "surface-variant": "#373246",
+                        "secondary-fixed-dim": "#00dbe7",
+                        "surface-container-highest": "#373246",
+                        "on-primary": "#3b2a46",
+                        "surface-container": "#221d2f",
+                        "tertiary-fixed-dim": "#d1bcff",
+                        "on-error-container": "#ffdad6",
+                        "surface-dim": "#151022",
+                        "on-tertiary-container": "#8a52ff",
+                        "secondary-fixed": "#74f5ff",
+                        "on-tertiary-fixed": "#23005b",
+                        "on-tertiary": "#3c0090",
+                        "on-surface": "#e8def8",
+                        "on-surface-variant": "#cdc4cc",
+                        "outline-variant": "#4b454c",
+                        "tertiary": "#d1bcff",
+                        "tertiary-fixed": "#e9ddff",
+                        "tertiary-container": "#090022",
+                        "secondary": "#ddfcff",
+                        "on-secondary-container": "#006a70",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#6b5776"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "margin": "20px",
+                        "lg": "40px",
+                        "base": "8px",
+                        "xl": "64px",
+                        "xs": "4px",
+                        "md": "24px",
+                        "sm": "12px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Be Vietnam Pro"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "currency-display": ["Space Grotesk"],
+                        "headline-lg": ["Space Grotesk"],
+                        "label-bold": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"],
+                        "display-xl": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "currency-display": ["40px", {"lineHeight": "1.0", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "label-bold": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "display-xl": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-[#0D0118]/80 backdrop-blur-[20px] border-b border-violet-400/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-cyan-400/30">
+<img alt="User avatar" data-alt="close-up of a stylish young tech professional with short dark hair wearing futuristic neon-lined streetwear" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfvok1u9JNcCatoOGbYUTvVe3znAHugKvrgvvhAyUafW5V1yQ5zKSKpDunN39Hsd2ZAxj7CRF-cbB274qLBpqOSQeB8cfPThAn3H8ny7RYyvedMMwyKbGim6I4EYgbHvFjaAnc6-hzIG2b-XVnz3sFG-dwPxIswShN82fIviqWPReW0UPsfbjg4KBR1Hs7TvJmBF_QR-nh3AzJRPL0hO7JCm22LnNMBnyejfh1YMOLNfzuSHyzj5xO2uX0qpOCqadA3sK-HrZQg3c"/>
+</div>
+<span class="font-['Space_Grotesk'] font-black tracking-wider text-2xl text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">KRATOR+</span>
+</div>
+<button class="text-cyan-400 hover:opacity-80 transition-opacity active:scale-95 duration-200 ease-out">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+</button>
+</header>
+<main class="pt-24 pb-32 px-margin max-w-7xl mx-auto space-y-lg">
+<!-- Hero Balance Section -->
+<section class="relative">
+<div class="glass-card rounded-3xl p-md flex flex-col items-center text-center space-y-sm overflow-hidden relative">
+<div class="absolute -top-12 -right-12 w-48 h-48 bg-cyan-400/10 blur-[60px] rounded-full"></div>
+<div class="absolute -bottom-12 -left-12 w-48 h-48 bg-tertiary/10 blur-[60px] rounded-full"></div>
+<span class="font-label-bold text-label-bold text-on-primary-container tracking-[0.2em] uppercase">Current Balance</span>
+<div class="flex items-center justify-center gap-4 py-2">
+<div class="w-12 h-12 flex items-center justify-center bg-cyan-400 rounded-xl neon-glow-cyan">
+<span class="material-symbols-outlined text-background text-3xl font-bold" data-icon="token" style="font-variation-settings: 'FILL' 1;">token</span>
+</div>
+<span class="font-currency-display text-currency-display text-secondary-container">84,250</span>
+</div>
+<div class="flex items-center gap-2 bg-background/50 px-4 py-2 rounded-full border border-violet-400/10">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="schedule">schedule</span>
+<span class="font-label-bold text-[12px] text-primary">SESSION STATUS: 2h 15m remaining</span>
+</div>
+</div>
+</section>
+<!-- Bento Grid Section -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Featured Watch & Earn (Bento Large) -->
+<div class="md:col-span-8 group relative overflow-hidden rounded-3xl glass-card aspect-video md:aspect-auto h-[320px] flex flex-col justify-end p-md border border-white/5">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-700" data-alt="high-tech neon computer setup with multiple monitors in a dark room with violet and cyan ambient lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvyA1J46603x-zPUNQnbaVYgiQ26LjjcjxzPNQe4ETXLVo4ilqIbO7wG-7flm1JbszkLaDVh3szMIkn6vQNPYzK0yhhU6bLBauB34rRaCrJJPuaKSDjoqyj1ihONkgIVfNpNQps_t3x6mF5UaE_1WfqkU1O2iUBpa809Dtd5PJHJ7hCifMNamBe96nS0TEIlDpBhcXZWwHefbCjvtqf6123L65H4C0tqxfIJ1q8hU94auusoGyJ5-MNXS9VfJe3RaIlm8XcgaWR0Q"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+</div>
+<div class="relative z-10 space-y-sm">
+<div class="inline-block bg-cyan-400 text-background px-3 py-1 rounded-full font-label-bold text-[10px] uppercase tracking-widest">Featured Task</div>
+<h2 class="font-headline-lg text-headline-lg text-on-background leading-tight">Watch &amp; Earn: <br/><span class="text-cyan-400">Cyber Tournament 2024</span></h2>
+<p class="font-body-md text-on-surface-variant max-w-md">Streaming live now. Earn up to 500 K+ coins per hour of viewing.</p>
+<button class="mt-4 bg-cyan-400 text-background px-6 py-3 rounded-xl font-label-bold flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all w-fit">
+                        WATCH NOW <span class="material-symbols-outlined" data-icon="play_circle" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</button>
+</div>
+</div>
+<!-- Milestone Tracker (Bento Small) -->
+<div class="md:col-span-4 glass-card rounded-3xl p-md flex flex-col space-y-md border border-white/5">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-md text-headline-md">Daily Goals</h3>
+<span class="text-cyan-400 font-label-bold">75%</span>
+</div>
+<div class="space-y-gutter flex-1">
+<div class="relative h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="absolute h-full w-3/4 bg-gradient-to-r from-tertiary to-cyan-400 neon-glow-cyan"></div>
+</div>
+<div class="space-y-sm">
+<div class="flex items-center gap-3 bg-white/5 p-3 rounded-2xl">
+<span class="material-symbols-outlined text-tertiary" data-icon="check_circle">check_circle</span>
+<span class="text-sm font-medium">Daily Check-in</span>
+</div>
+<div class="flex items-center gap-3 bg-white/5 p-3 rounded-2xl">
+<span class="material-symbols-outlined text-tertiary" data-icon="check_circle">check_circle</span>
+<span class="text-sm font-medium">Watch 3 Videos</span>
+</div>
+<div class="flex items-center gap-3 bg-white/5 p-3 rounded-2xl opacity-50">
+<span class="material-symbols-outlined text-slate-500" data-icon="radio_button_unchecked">radio_button_unchecked</span>
+<span class="text-sm font-medium">Earn 1000 Coins</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Gift Cards Section -->
+<section class="space-y-gutter">
+<div class="flex justify-between items-end px-2">
+<h2 class="font-headline-lg text-headline-lg">Gift Cards</h2>
+<button class="text-primary font-label-bold text-sm hover:underline">VIEW ALL</button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter">
+<!-- Card 1 -->
+<div class="glass-card rounded-2xl p-sm space-y-sm relative group cursor-pointer hover:border-cyan-400/50 transition-colors">
+<div class="absolute top-3 right-3 z-10 bg-[#151022]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 font-label-bold text-cyan-400 text-[10px]">
+                        25,000 K+
+                    </div>
+<div class="aspect-[3/2] rounded-xl overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="abstract flowing mesh gradient in shades of vibrant orange and electric blue on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBdj3CbaKLMNPeEpttlwLSQMpcXwlRppDG36He9hy-lat3rRNBGuqAcmIyy-LIbK5a_ukudV8c9jAOFwTqtluyMJG3PQo0Ez3Q25CUQQbSIZF4haIZ0cBu-SKlOy3PGA3iRVAqjZ3l-fXY2TWNdZ7cqU2w8OE3trauqdD5o-XD3coqEmy1CFMtJO3v-zIc5el8pEvYVGjw4BDf8s42RWHF3zOsrEYOn_V1qyc7Y93mqGktubEESc-GgaFRHFqg2zGEJCjNoZ7mlEg"/>
+</div>
+<div class="px-1">
+<p class="font-label-bold text-xs text-on-surface-variant uppercase tracking-widest">Entertainment</p>
+<p class="font-headline-md text-lg">StreamCloud Plus</p>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="glass-card rounded-2xl p-sm space-y-sm relative group cursor-pointer hover:border-cyan-400/50 transition-colors">
+<div class="absolute top-3 right-3 z-10 bg-[#151022]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 font-label-bold text-cyan-400 text-[10px]">
+                        50,000 K+
+                    </div>
+<div class="aspect-[3/2] rounded-xl overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="futuristic gaming controller glowing with blue and pink neon light in a dark room" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpIG8MdKVJWMoTR0BqjtbWapfACw4QwCnZR69uCRqwQfH7s2bCcZJoYbCTDI_fRfKmBd9GshR5I9r7OecYoJ_9uApysZKn8EmHKs4MoXPv2327Ieye5r5hj7aKDrTL9OH-TCzPUNLSQEHy4O8sxBxXNh-FcOjxyrRdkfhQoqHpvGZ8QziC3qUAyjSjw7FDP5Z0W_ha7tTQ8Mo_V5xPrvvpxW7z-bJPNpgZhCqBfzhRYrIx7tJmMbYPRjW_2yjF79mBO0ljM-ZqqNA"/>
+</div>
+<div class="px-1">
+<p class="font-label-bold text-xs text-on-surface-variant uppercase tracking-widest">Gaming</p>
+<p class="font-headline-md text-lg">Nexus Gaming</p>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="glass-card rounded-2xl p-sm space-y-sm relative group cursor-pointer hover:border-cyan-400/50 transition-colors">
+<div class="absolute top-3 right-3 z-10 bg-[#151022]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 font-label-bold text-cyan-400 text-[10px]">
+                        15,000 K+
+                    </div>
+<div class="aspect-[3/2] rounded-xl overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="minimalist wave pattern in deep purple and magenta with soft highlights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8CIZiMS83sZHmrOU7RIiDsKT_X8DmhQ_2ER5DYjHbsi1WGEf4GqogrvX2K6isDweWRQ9wpIU7TondwQ9JHKRkVVcJwz02eO-E6sY1WOGff1n2mB_inX0uwxEmXHGja2SKDsRVX8SvqBkndMV2YdQRxbJgP6t4r1xZG3qkChvp5wvagxtioJA_NZ4ZGJG6Zk3JDxnj7I5QlYoXnSMGK23PZX_gZEFRVyUAhBLDXPfsEvjL_Wqi12JfhQbQmTScesp645i9jrdWclk"/>
+</div>
+<div class="px-1">
+<p class="font-label-bold text-xs text-on-surface-variant uppercase tracking-widest">Shopping</p>
+<p class="font-headline-md text-lg">Vortex Mart</p>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="glass-card rounded-2xl p-sm space-y-sm relative group cursor-pointer hover:border-cyan-400/50 transition-colors">
+<div class="absolute top-3 right-3 z-10 bg-[#151022]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 font-label-bold text-cyan-400 text-[10px]">
+                        100,000 K+
+                    </div>
+<div class="aspect-[3/2] rounded-xl overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform" data-alt="vibrant esports arena with bright lights and digital screens showing gaming graphics" src="https://lh3.googleusercontent.com/aida-public/AB6AXuClX5tC_dPi2WsUNYOCpXimdAnEsh2UnWZf3f9P-ViUGzvyvObWw_3d0uQOKvVPzc6kXeO7k7ONwrrn2WAumhwiuBCCktCsUaOaFNDgxiWendYaEeqKnvi6GGj_0UjEGEXQZNiwc7C2BbzA9TIpRxo4PvCdYn7gPH9nHapWdAQ6yctueAGNIi8Lp4rueKWAHhaSvqDpZJWdoDGMw1oKh9iW2p16jI9jK3n9Ta8sM5yp8DhlcVDvy9J3PGPBIZN6WVOW6MXloo4kUAI"/>
+</div>
+<div class="px-1">
+<p class="font-label-bold text-xs text-on-surface-variant uppercase tracking-widest">Lifestyle</p>
+<p class="font-headline-md text-lg">Elite Rewards</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-[#0D0118]/80 backdrop-blur-[20px] border-t border-violet-400/20 rounded-t-2xl shadow-[0_-10px_25px_rgba(13,1,24,0.8)]">
+<a class="flex flex-col items-center justify-center text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] bg-violet-900/30 rounded-xl px-4 py-1 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="grid_view" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors hover:bg-white/5 px-4 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Videos</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors hover:bg-white/5 px-4 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Shop</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-violet-300 transition-colors hover:bg-white/5 px-4 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

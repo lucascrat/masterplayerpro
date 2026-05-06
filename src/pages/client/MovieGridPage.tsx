@@ -10,6 +10,8 @@ interface MovieGridPageProps {
   onBack: () => void;
   onPlay: (url: string) => void;
   onSearch?: () => void;
+  favorites?: any[];
+  onToggleFavorite?: (item: M3UItem) => void;
 }
 
 // ── Batch poster fetch ──────────────────────────────────────────────
@@ -221,7 +223,7 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
 }
 
 // ── Main Page ───────────────────────────────────────────────────────
-export default function MovieGridPage({ title, items, onBack, onPlay, onSearch }: MovieGridPageProps) {
+export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, favorites = [], onToggleFavorite }: MovieGridPageProps) {
   const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<{ name: string; episodes: M3UItem[] } | null>(null);
 
@@ -360,6 +362,8 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch }
           item={selectedItem}
           onPlay={(url) => { setSelectedItem(null); onPlay(url); }}
           onClose={() => setSelectedItem(null)}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       )}
 
@@ -370,6 +374,8 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch }
           episodes={selectedShow.episodes}
           onPlay={(url) => { setSelectedShow(null); onPlay(url); }}
           onClose={() => setSelectedShow(null)}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       )}
     </div>

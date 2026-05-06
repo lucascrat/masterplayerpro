@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#574500",
+                        "surface-bright": "#3c3457",
+                        "inverse-primary": "#6d3bd7",
+                        "on-primary": "#3c0091",
+                        "on-error": "#690005",
+                        "tertiary-fixed": "#ffd9e4",
+                        "on-surface-variant": "#cbc3d7",
+                        "tertiary-fixed-dim": "#ffb0cd",
+                        "secondary-fixed": "#ffe083",
+                        "inverse-surface": "#e7deff",
+                        "on-tertiary-fixed-variant": "#8c0053",
+                        "on-tertiary": "#640039",
+                        "surface": "#150e2e",
+                        "secondary-container": "#eec200",
+                        "on-secondary": "#3c2f00",
+                        "primary": "#d0bcff",
+                        "surface-container-lowest": "#100829",
+                        "outline-variant": "#494454",
+                        "on-primary-fixed-variant": "#5516be",
+                        "tertiary-container": "#f751a1",
+                        "on-primary-container": "#340080",
+                        "on-secondary-container": "#645000",
+                        "tertiary": "#ffb0cd",
+                        "secondary-fixed-dim": "#eec200",
+                        "on-primary-fixed": "#23005c",
+                        "surface-container": "#221a3b",
+                        "inverse-on-surface": "#332b4d",
+                        "on-tertiary-container": "#570032",
+                        "surface-container-high": "#2c2546",
+                        "primary-container": "#a078ff",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#d0bcff",
+                        "surface-dim": "#150e2e",
+                        "on-tertiary-fixed": "#3e0022",
+                        "secondary": "#ffe083",
+                        "surface-container-highest": "#373052",
+                        "error-container": "#93000a",
+                        "outline": "#958ea0",
+                        "on-surface": "#e7deff",
+                        "surface-variant": "#373052",
+                        "on-background": "#e7deff",
+                        "primary-fixed": "#e9ddff",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#231b00",
+                        "background": "#150e2e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-md": "12px",
+                        "container-margin": "24px",
+                        "section-gap": "40px",
+                        "gutter": "16px",
+                        "unit": "8px",
+                        "stack-lg": "24px",
+                        "stack-sm": "4px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "body-lg": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"],
+                        "headline-lg": ["Space Grotesk"],
+                        "body-md": ["Space Grotesk"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #150e2e;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(109, 59, 215, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(247, 81, 161, 0.1) 0px, transparent 50%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-yellow-glow {
+            filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.4));
+        }
+        .neon-purple-glow {
+            box-shadow: 0 0 20px rgba(160, 120, 255, 0.2);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-background">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-slate-950/40 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-6 py-4 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full border-2 border-violet-500/30 overflow-hidden">
+<img alt="Foto de perfil do usuário" class="w-full h-full object-cover" data-alt="Close-up portrait of a young man with a friendly expression, soft cinematic lighting, neon purple accents in background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNDVWJE2UxH5qJDqpGEbAuR5rPELc17dX3Hkx7vw7FhhCH-VVa5EJpdih_QQhAEVBHGP9qlVZDpfkp2Q9B2NRZxhQAhRUKXThnA_KHEddqGTGOlyqmQnim4oGlzLFHRZlsY0Rf7kPnDuQjMkNu9rvw7yIuoeFPw-XNusA7vdC3aQiLnEbn9TAasxnG6hlWoEVEZL2D_zVuYnRb7BLQ9e1YVjnmJZhlBR8Nmt_DMpJJnES_el5xM64BMNNPBV0x2qm9S6bzuqM4iKs"/>
+</div>
+<span class="font-['Space_Grotesk'] font-black text-xl bg-gradient-to-r from-violet-400 to-fuchsia-500 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(167,139,250,0.5)] tracking-wider">
+                Krator+
+            </span>
+</div>
+<div class="bg-white/5 px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
+<span class="text-secondary font-bold font-['Space_Grotesk'] tracking-wider">1.250 ●</span>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-section-gap">
+<!-- Session Status & Balance Bento -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-stack-lg">
+<!-- Balance Card -->
+<div class="glass-card rounded-3xl p-stack-lg flex flex-col justify-between h-44 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-8xl" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+<div>
+<h3 class="text-violet-300/60 font-label-md uppercase tracking-widest text-[10px]">Saldo Disponível</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="material-symbols-outlined text-secondary neon-yellow-glow" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="text-4xl font-black text-secondary neon-yellow-glow font-display-lg">1.250</span>
+<span class="text-violet-300/60 font-bold ml-1">K+</span>
+</div>
+</div>
+<div class="bg-violet-500/20 self-start px-3 py-1 rounded-full border border-violet-500/30">
+<p class="text-primary text-[12px] font-bold">+125 hoje</p>
+</div>
+</div>
+<!-- Session Status Card -->
+<div class="glass-card rounded-3xl p-stack-lg flex flex-col justify-between h-44 border-fuchsia-500/20">
+<div>
+<h3 class="text-violet-300/60 font-label-md uppercase tracking-widest text-[10px]">Status da Sessão</h3>
+<div class="flex items-center gap-3 mt-2">
+<div class="w-3 h-3 bg-fuchsia-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(247,81,161,0.8)]"></div>
+<span class="text-2xl font-bold font-headline-md">Ativa</span>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="text-violet-300/60 text-xs">Tempo restante</span>
+<span class="text-on-background font-bold">02:14:45</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 w-3/4 rounded-full"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Daily Tasks -->
+<section class="space-y-stack-lg">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-md text-on-background">Tarefas Diárias</h2>
+<span class="text-primary text-xs font-bold tracking-widest uppercase">2/5 Concluídas</span>
+</div>
+<div class="space-y-stack-md">
+<!-- Check-in Task -->
+<div class="glass-card rounded-2xl p-4 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center text-primary border border-violet-500/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+</div>
+<div>
+<p class="font-bold">Check-in Diário</p>
+<p class="text-violet-300/60 text-xs">Ganhe moedas apenas por entrar</p>
+</div>
+</div>
+<div class="bg-secondary text-on-secondary font-black px-4 py-2 rounded-xl text-sm shadow-lg shadow-yellow-500/20">
+                        +50 K+
+                    </div>
+</div>
+<!-- Video Task -->
+<div class="glass-card rounded-2xl p-4 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-fuchsia-500/20 flex items-center justify-center text-tertiary border border-fuchsia-500/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+<div>
+<p class="font-bold">Assistir Vídeo</p>
+<p class="text-violet-300/60 text-xs">Veja anúncios curtos e ganhe</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-violet-300/60 text-xs">0/3</span>
+<div class="bg-white/5 border border-white/10 text-on-background font-bold px-4 py-2 rounded-xl text-sm">
+                            +20 K+
+                        </div>
+</div>
+</div>
+</div>
+</section>
+<!-- Rewards Cards Section -->
+<section class="space-y-stack-lg">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-md text-on-background">Gift Cards Premium</h2>
+<button class="text-primary text-xs font-bold uppercase tracking-tighter">Ver Todos</button>
+</div>
+<div class="grid grid-cols-2 gap-stack-md">
+<!-- Netflix Card -->
+<div class="glass-card rounded-3xl overflow-hidden group">
+<div class="relative h-32 overflow-hidden">
+<img alt="Netflix Gift Card" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Cinematic shot of a cozy dark living room with a glowing screen, movie atmosphere, red and dark blue lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNmkt1ow377Zc5T7NZLN2-zym85XTZneNhTzTuqfft-dgdqTyQICEyLMgJ9b840v2gWk-YW2NKOeb3l0AUic-at0e2loo7EEneBTGBHMSQGVKqv7rd3zunE6u6ppzrpD91RK42HghY9jUJvtnDQ7CEK1SMqcoTeybmBnMSxGQp8JYFLCqcO3Px2N9W-1kqUAMFNw1vDmor5xmF50T9cEANCiP8u6Q6lMonXPtg50-3Q23q58qnwXKXdun0wvCCkCe40GXG5EyZ-F8"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+<span class="text-[10px] text-red-500 font-bold uppercase">Netflix</span>
+</div>
+</div>
+<div class="p-4 space-y-2">
+<p class="font-bold text-sm">Cartão R$ 50,00</p>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="text-secondary font-black text-md">5.000</span>
+</div>
+<button class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center shadow-lg shadow-violet-500/40">
+<span class="material-symbols-outlined text-white text-sm">redeem</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Google Play Card -->
+<div class="glass-card rounded-3xl overflow-hidden group">
+<div class="relative h-32 overflow-hidden">
+<img alt="Play Store Card" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Digital abstract art with neon green and blue geometric shapes, futuristic gaming aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeexYOYIxE-RsYaCvLEvkFSMLhZ5SeXD_A_i8QAUOnZrDv-xwwL-1XM9W0KkBXmAdDSZ4LVN93u5CytHXX1xVnGHisJBP8ielKmIdiTA2_sWV6e7JxuV4FdHyqBiK9cA_XLo7SIQXvhZppHLYRY-jZfzATjMvam18qKq8cECcp563WN7mVcEV9s3KDGtWtECoPFTtsdV1ywPoER0a6NOYDVM49Ave6SeBiwgHVHVQNi8aThYDc2Lb_AKgOjFGpf1Q_PQSoAyAV_is"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+<div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+<span class="text-[10px] text-green-400 font-bold uppercase">Play Store</span>
+</div>
+</div>
+<div class="p-4 space-y-2">
+<p class="font-bold text-sm">Crédito R$ 30,00</p>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="text-secondary font-black text-md">3.200</span>
+</div>
+<button class="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center shadow-lg shadow-violet-500/40">
+<span class="material-symbols-outlined text-white text-sm">redeem</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-8 bg-slate-950/60 backdrop-blur-2xl rounded-t-3xl border-t border-white/10 shadow-[0_-10px_40px_rgba(139,92,246,0.15)]">
+<!-- Início (Active) -->
+<a class="flex flex-col items-center justify-center text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.8)] scale-110 translate-y-[-4px] transition-all duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Início</span>
+</a>
+<!-- Vídeos -->
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all" href="#">
+<span class="material-symbols-outlined">play_circle</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Vídeos</span>
+</a>
+<!-- Loja -->
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Loja</span>
+</a>
+<!-- Perfil -->
+<a class="flex flex-col items-center justify-center text-violet-400/40 hover:text-violet-200 transition-all" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Space_Grotesk'] text-[10px] uppercase tracking-widest mt-1">Perfil</span>
+</a>
+</nav>
+</body></html>

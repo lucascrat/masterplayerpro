@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import rewardsRoutes, { HOURS_PER_COIN } from './routes/rewardsRoutes';
+import favoriteRoutes from './routes/favoriteRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
 import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
 import prisma from './db';
@@ -141,6 +142,7 @@ app.use(express.json());
 app.use('/api', deviceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/rewards', rewardsRoutes);
+app.use('/api/favorites', favoriteRoutes);
 
 // ── Stream Proxy ─────────────────────────────────────────────────────────────
 // IPTV servers run on HTTP, app is on HTTPS — browser blocks mixed content.

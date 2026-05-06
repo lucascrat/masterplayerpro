@@ -35,9 +35,11 @@ interface SeriesDetailProps {
   episodes: M3UItem[];
   onPlay: (url: string) => void;
   onClose: () => void;
+  favorites?: any[];
+  onToggleFavorite?: (item: M3UItem) => void;
 }
 
-export default function SeriesDetail({ showName, episodes, onPlay, onClose }: SeriesDetailProps) {
+export default function SeriesDetail({ showName, episodes, onPlay, onClose, favorites = [], onToggleFavorite }: SeriesDetailProps) {
   const [tmdb, setTmdb] = useState<TMDBData | null>(null);
   const [loading, setLoading] = useState(true);
   const [openSeason, setOpenSeason] = useState<number | null>(null);
@@ -138,6 +140,15 @@ export default function SeriesDetail({ showName, episodes, onPlay, onClose }: Se
             {loading && <div style={{ color: '#888', fontSize: '0.82rem', marginBottom: '0.5rem' }}>Buscando informações...</div>}
             {overview && (
               <p style={{ color: '#ccc', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: '0.75rem' }}>{overview}</p>
+            )}
+            {onToggleFavorite && (
+              <button 
+                className={`fav-btn ${favorites.some(f => f.itemName === showName && f.itemType === 'series') ? 'active' : ''}`}
+                onClick={() => onToggleFavorite({ name: showName, type: 'series', url: episodes[0]?.url || '', group: episodes[0]?.group || '', logo: episodes[0]?.logo || '' })}
+                style={{ opacity: 1, filter: 'none', background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 20px', fontSize: '0.9rem', color: '#fff' }}
+              >
+                {favorites.some(f => f.itemName === showName && f.itemType === 'series') ? '❤️ Favorito' : '🤍 Favoritar'}
+              </button>
             )}
           </div>
         </div>
