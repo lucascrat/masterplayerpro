@@ -1,3 +1,4 @@
+// Deployment Trigger: Cloudflare Framework Preset set to Vite
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useClock } from './hooks/useClock';
