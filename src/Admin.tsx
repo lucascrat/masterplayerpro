@@ -174,7 +174,7 @@ export default function Admin() {
   };
 
   // IPTV Credentials CRUD
-  const createIptvCredential = async (data: { username: string; password: string; playlistId: string; maxLeases?: number }) => {
+  const createIptvCredential = async (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) => {
     try {
       await adminApi.post('/admin/iptv-credentials', data);
       fetchAll();

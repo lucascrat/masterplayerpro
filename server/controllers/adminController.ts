@@ -196,17 +196,69 @@ export const getIptvCredentials = async (_req: Request, res: Response) => {
 };
 
 export const createIptvCredential = async (req: Request, res: Response) => {
-  const { username, password, playlistId, maxLeases } = req.body;
-  if (!username || !password || !playlistId) {
-    res.status(400).json({ error: 'Usuário, senha e playlist são obrigatórios.' });
+  const { username, password, playlistId, serverUrl, maxLeases } = req.body;
+  if (!username || !password || (!playlistId && !serverUrl)) {
+    res.status(400).json({ error: 'Usuário, senha e Playlist (ou DNS) são obrigatórios.' });
     return;
   }
   try {
+    let finalPlaylistId = playlistId;
+
+    // If a serverUrl/DNS was provided instead of a playlistId, find or create it
+    if (serverUrl) {
+      let cleanUrl = serverUrl.trim();
+      if (!cleanUrl.startsWith('http')) cleanUrl = `http://${cleanUrl}`;
+      
+      // Extract origin to check for existing playlist
+      let origin = '';
+      try { origin = new URL(cleanUrl).origin; } catch {}
+
+      if (origin) {
+        // Try to find a playlist with this origin
+        const existing = await prisma.playlist.findFirst({
+          where: { url: { contains: origin } }
+        });
+
+        if (existing) {
+          finalPlaylistId = existing.id;
+        } else {
+          // Create a new playlist for this DNS
+          let admin = await prisma.adminUser.findFirst();
+          
+          // Construct a full M3U URL if only DNS was provided
+          let fullM3u = cleanUrl;
+          if (!cleanUrl.includes('get.php') && !cleanUrl.includes('.m3u')) {
+            const separator = cleanUrl.endsWith('/') ? '' : '/';
+            fullM3u = `${cleanUrl}${separator}get.php?username=${username}&password=${password}&type=m3u_plus&output=m3u8`;
+          }
+
+          const newPlaylist = await prisma.playlist.create({
+            data: {
+              name: `Auto: ${new URL(cleanUrl).hostname}`,
+              url: fullM3u,
+              adminId: admin?.id || '',
+              username: username,
+              password: password
+            }
+          });
+          finalPlaylistId = newPlaylist.id;
+          
+          // Trigger preload for the new playlist
+          preloadAllPlaylists().catch(err => console.error('[Admin] Preload failed:', err.message));
+        }
+      }
+    }
+
+    if (!finalPlaylistId) {
+      res.status(400).json({ error: 'Não foi possível identificar ou criar a playlist para este DNS.' });
+      return;
+    }
+
     const cred = await prisma.iptvCredential.create({
       data: { 
         username: username.trim().toLowerCase(), 
         password, 
-        playlistId, 
+        playlistId: finalPlaylistId, 
         maxLeases: maxLeases || 2 
       },
     });

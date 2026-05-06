@@ -31,7 +31,7 @@ interface AdminUsersProps {
   onCreateUser: (data: { username: string; password: string; name?: string }) => void;
   onUpdateUser: (id: string, data: any) => void;
   onDeleteUser: (id: string) => void;
-  onCreateCredential: (data: { username: string; password: string; playlistId: string; maxLeases?: number }) => void;
+  onCreateCredential: (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) => void;
   onDeleteCredential: (id: string) => void;
 }
 
@@ -42,8 +42,8 @@ export default function AdminUsers({
 }: AdminUsersProps) {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showCredForm, setShowCredForm] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', password: '', name: '' });
-  const [newCred, setNewCred] = useState({ username: '', password: '', playlistId: '', maxLeases: '2' });
+   const [newUser, setNewUser] = useState({ username: '', password: '', name: '' });
+  const [newCred, setNewCred] = useState({ username: '', password: '', playlistId: '', serverUrl: '', maxLeases: '2' });
 
   const handleCreateUser = () => {
     if (!newUser.username || !newUser.password) return;
@@ -52,15 +52,16 @@ export default function AdminUsers({
     setShowUserForm(false);
   };
 
-  const handleCreateCred = () => {
-    if (!newCred.username || !newCred.password || !newCred.playlistId) return;
+   const handleCreateCred = () => {
+    if (!newCred.username || !newCred.password || (!newCred.playlistId && !newCred.serverUrl)) return;
     onCreateCredential({
       username: newCred.username,
       password: newCred.password,
-      playlistId: newCred.playlistId,
+      playlistId: newCred.playlistId || undefined,
+      serverUrl: newCred.serverUrl || undefined,
       maxLeases: parseInt(newCred.maxLeases) || 2,
     });
-    setNewCred({ username: '', password: '', playlistId: '', maxLeases: '2' });
+    setNewCred({ username: '', password: '', playlistId: '', serverUrl: '', maxLeases: '2' });
     setShowCredForm(false);
   };
 
@@ -177,12 +178,16 @@ export default function AdminUsers({
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Senha IPTV</label>
               <input className="admin-input" value={newCred.password} onChange={e => setNewCred({ ...newCred, password: e.target.value })} placeholder="188308988" />
             </div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Playlist</label>
-              <select className="admin-select" value={newCred.playlistId} onChange={e => setNewCred({ ...newCred, playlistId: e.target.value })}>
+             <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Playlist Existente</label>
+              <select className="admin-select" value={newCred.playlistId} onChange={e => setNewCred({ ...newCred, playlistId: e.target.value, serverUrl: '' })}>
                 <option value="">Selecione...</option>
                 {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>ou Novo DNS / URL</label>
+              <input className="admin-input" value={newCred.serverUrl} onChange={e => setNewCred({ ...newCred, serverUrl: e.target.value, playlistId: '' })} placeholder="http://girassoldh.top" />
             </div>
             <div style={{ width: 80 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Max Usos</label>
