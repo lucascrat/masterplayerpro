@@ -13,8 +13,4 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase credentials missing. Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-  db: {
-    schema: 'masterplayer',
-  },
-});
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
