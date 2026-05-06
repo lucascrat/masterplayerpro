@@ -37,13 +37,16 @@ export default function App() {
     setPlaylistLoading(true);
     try {
       const items = await parseM3UFromUrl(url);
+      if (items.length === 0) throw new Error('Nenhum item encontrado na lista.');
+      
       setPlaylist({
         live:   items.filter(i => i.type === 'live'),
         movies: items.filter(i => i.type === 'movie'),
         series: items.filter(i => i.type === 'series'),
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao carregar playlist:', err);
+      alert('Erro ao carregar lista: ' + (err.message || 'Verifique sua conexão ou a URL da lista.'));
     } finally {
       setPlaylistLoading(false);
     }
@@ -147,9 +150,10 @@ export default function App() {
         sessionId
       };
 
+      // Substituir credenciais na URL (suporta username/user e password/pass)
       const finalUrl = playlistUrl
-        .replace(/username=[^&]*/i, `username=${credential.username}`)
-        .replace(/password=[^&]*/i, `password=${credential.password}`);
+        .replace(/(username|user)=[^&]*/i, `$1=${credential.username}`)
+        .replace(/(password|pass)=[^&]*/i, `$1=${credential.password}`);
 
       setSession(auth);
       // Salvar URL para poder recarregar depois

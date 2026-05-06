@@ -88,17 +88,25 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
   // Try direct fetch first; fall back to a CORS proxy if needed
   let text = '';
   try {
+    console.log('Fetching M3U:', url.split('?')[0] + '?...'); // Log obfuscated URL
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     text = await res.text();
-  } catch {
+  } catch (e) {
+    console.warn('Direct fetch failed, trying proxy...', e);
     // CORS proxy fallback
     const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxy, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Proxy fetch failed: HTTP ${res.status}`);
     text = await res.text();
   }
 
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!text || !text.includes('#EXTM3U')) {
+    throw new Error('O arquivo retornado não é uma lista M3U válida.');
+  }
+
+  // Handle both \n and \r\n
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items: M3UItem[] = [];
 
   for (let i = 0; i < lines.length; i++) {
