@@ -6,11 +6,7 @@
 // Deployment Trigger: Build Output Directory updated to 'dist'
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = 'https://qyagfghcnzenvbhbtsvd.supabase.co';
+const supabaseAnonKey = 'sb_publishable_vdg0_67y7KngtEi0Rjqy1Q_i83l9mWe';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials missing. Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
-}
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
