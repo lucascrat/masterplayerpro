@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../db';
+import { preloadAllPlaylists } from '../services/m3uService';
 
 // Extract username/password from M3U URL
 function extractCredentials(url: string): { username: string; password: string } | null {
@@ -91,6 +92,10 @@ export const createPlaylist = async (req: Request, res: Response) => {
   const playlist = await prisma.playlist.create({
     data: { name, url, type: playlistType, adminId: admin.id, username, password }
   });
+  
+  // Trigger preload so the server recognizes the new IPTV origin immediately
+  preloadAllPlaylists().catch(err => console.error('[Admin] Preload failed:', err.message));
+  
   res.json(playlist);
 };
 
@@ -111,6 +116,12 @@ export const updatePlaylist = async (req: Request, res: Response) => {
   if (password !== undefined) data.password = password;
 
   const playlist = await prisma.playlist.update({ where: { id }, data });
+  
+  // Trigger preload if URL or credentials changed
+  if (data.url || data.username || data.password) {
+    preloadAllPlaylists().catch(err => console.error('[Admin] Preload failed:', err.message));
+  }
+  
   res.json(playlist);
 };
 
@@ -192,7 +203,12 @@ export const createIptvCredential = async (req: Request, res: Response) => {
   }
   try {
     const cred = await prisma.iptvCredential.create({
-      data: { username, password, playlistId, maxLeases: maxLeases || 2 },
+      data: { 
+        username: username.trim().toLowerCase(), 
+        password, 
+        playlistId, 
+        maxLeases: maxLeases || 2 
+      },
     });
     res.json(cred);
   } catch (err: any) {
