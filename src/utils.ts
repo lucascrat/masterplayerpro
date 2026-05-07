@@ -90,7 +90,7 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
   let errorDetail = '';
 
   const fetchMethods = [
-    // Método 1: Fetch Direto (mais rápido, mas pode falhar por CORS)
+    // Método 1: Fetch Direto
     async () => {
       console.log('Tentando Fetch Direto...');
       const res = await fetch(url, { cache: 'no-store' });
@@ -105,7 +105,7 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       if (!res.ok) throw new Error(`Proxy 1 falhou: ${res.status}`);
       const text = await res.text();
       if (text.includes('Oops... Really?') || text.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 1 retornou uma página de erro');
+        throw new Error('Proxy 1 retornou erro HTML');
       }
       return text;
     },
@@ -117,32 +117,43 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       if (!res.ok) throw new Error(`Proxy 2 falhou: ${res.status}`);
       const text = await res.text();
       if (text.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 2 retornou HTML ao invés de M3U');
+        throw new Error('Proxy 2 retornou HTML');
       }
       return text;
     },
-    // Método 4: Proxy AllOrigins (Get - JSON Wrapper)
+    // Método 4: Proxy CodeTabs (Resiliente)
     async () => {
-      console.log('Tentando Proxy 3 (AllOrigins Get)...');
+      console.log('Tentando Proxy 3 (CodeTabs)...');
+      const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Proxy 3 falhou: ${res.status}`);
+      const text = await res.text();
+      if (text.includes('<!DOCTYPE html>')) {
+        throw new Error('Proxy 3 retornou HTML');
+      }
+      return text;
+    },
+    // Método 5: Proxy AllOrigins (Get - JSON Wrapper)
+    async () => {
+      console.log('Tentando Proxy 4 (AllOrigins Get)...');
       const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
       const res = await fetch(proxyUrl, { cache: 'no-store' });
       const body = await res.text();
       
       if (!body || body.includes('Oops... Really?') || body.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 3 retornou uma página de erro ou corpo vazio');
+        throw new Error('Proxy 4 retornou erro ou corpo vazio');
       }
 
       try {
         const data = JSON.parse(body);
         if (data.contents) {
           if (data.contents.includes('<!DOCTYPE html>')) {
-            throw new Error('Conteúdo do Proxy 3 é HTML (erro do provedor)');
+            throw new Error('Conteúdo do Proxy 4 é HTML (erro do provedor)');
           }
           return data.contents;
         }
-        throw new Error('Formato JSON inválido no Proxy 3');
+        throw new Error('Formato JSON inválido no Proxy 4');
       } catch (e: any) {
-        // Se for o erro de JSON, simplifica a mensagem para não assustar o usuário
         if (e.message.includes('Unexpected token') || e.message.includes('is not valid JSON')) {
           throw new Error('O servidor de proxy retornou uma resposta inválida (não-JSON)');
         }
