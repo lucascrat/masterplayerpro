@@ -30,11 +30,14 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
 
-  const useHls      = isHlsManifest(url);
+  // Improved detection
+  const isHls = url.toLowerCase().includes('.m3u8') || url.toLowerCase().includes('/hls/');
+  const isMp4 = url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.mkv');
+  const isTs  = url.toLowerCase().includes('.ts') || (!isHls && !isMp4); // Default to TS if unknown
+
   const effectiveUrl = getEffectiveUrl(url);
 
-  // For non-HLS streams (like direct .ts links), we create a virtual manifest
-  // so hls.js can still process them as segments.
+  // Virtual HLS manifest (only for TS streams)
   const virtualManifest = `data:application/vnd.apple.mpegurl;base64,${btoa(
     `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.0,\n${effectiveUrl}`
   )}`;
@@ -48,15 +51,11 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const el    = containerRef.current;
     if (!el || !video) return;
 
-    // Detect iOS/Safari to skip problematic fullscreen logic
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|Firefox/.test(navigator.userAgent);
 
     const tryFullscreen = () => {
-      const req =
-        el.requestFullscreen?.bind(el) ||
-        (el as any).webkitRequestFullscreen?.bind(el) ||
-        (el as any).mozRequestFullScreen?.bind(el);
+      const req = el.requestFullscreen?.bind(el) || (el as any).webkitRequestFullscreen?.bind(el);
       if (req) req().then(() => { fsEnteredRef.current = true; }).catch(() => {});
     };
 
@@ -65,14 +64,12 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       if (enterFS && !isIOS) { fsEnteredRef.current = true; enterFS.call(video); }
     };
 
-    // Skip automatic fullscreen on iOS — let native player handle it
     const timer = setTimeout(() => {
       if (isIOS || isSafari) return;
-      if (document.fullscreenElement || (document as any).webkitFullscreenElement) return;
+      if (document.fullscreenElement) return;
       (video as any).webkitEnterFullscreen ? tryVideoFs() : tryFullscreen();
     }, 300);
 
-    // Only auto-close when user deliberately exits fullscreen
     const onFsChange = () => {
       const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
       if (!fsEl && fsEnteredRef.current) onClose();
@@ -90,8 +87,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   const handleClose = () => {
     const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
     if (fsEl) {
-      const exit = document.exitFullscreen?.bind(document) ||
-                   (document as any).webkitExitFullscreen?.bind(document);
+      const exit = document.exitFullscreen?.bind(document) || (document as any).webkitExitFullscreen?.bind(document);
       if (exit) exit().catch(() => {});
     }
     onClose();
@@ -102,19 +98,17 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const video = videoRef.current;
     if (!video) return;
 
-    console.log(`[Player] Iniciando reprodução: ${url}`);
-    console.log(`[Player] URL Efetiva: ${effectiveUrl}`);
+    console.log(`[Player] Iniciando: ${url}`);
+    console.log(`[Player] Tipo Detectado: ${isHls ? 'HLS' : isMp4 ? 'MP4/Direct' : 'TS/Wrap'}`);
 
     setError(null);
     setLoading(true);
     fsEnteredRef.current = false;
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    // Hard timeout — show error after 25 s instead of loading forever
     timeoutRef.current = setTimeout(() => {
       setLoading(false);
-      setError('O stream demorou muito para responder. Tente novamente ou use o VLC.');
+      setError('O servidor demorou muito para responder. Tente o VLC.');
     }, 25000);
 
     const clearTO = () => {
@@ -127,7 +121,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const onError   = () => {
       clearTO();
       setLoading(false);
-      console.error('[Player] Erro nativo do elemento <video>');
+      console.error('[Player] Erro no elemento video');
       setError('Não foi possível reproduzir este conteúdo.');
     };
 
@@ -136,49 +130,45 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('error',   onError);
 
-    const sourceToLoad = useHls ? effectiveUrl : virtualManifest;
-
-    if (Hls.isSupported()) {
+    // Decision logic
+    if (isMp4) {
+      // Direct playback for MP4/MKV
+      video.src = effectiveUrl;
+      video.load();
+      video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        maxBufferLength: 30,
         manifestLoadingMaxRetry: 4,
         levelLoadingMaxRetry: 4,
-        fragLoadingMaxRetry: 4,
-        xhrSetup: (xhr) => {
-           xhr.withCredentials = false;
-        }
       });
       hlsRef.current = hls;
-      hls.loadSource(sourceToLoad);
+      const source = isHls ? effectiveUrl : virtualManifest;
+      hls.loadSource(source);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('[Player] Manifest carregado com sucesso');
-        video.play().catch(() => {});
-      });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       hls.on(Hls.Events.ERROR, (_ev, data) => {
-        console.warn(`[Player] HLS Error: ${data.type} - ${data.details}`, data);
+        console.warn(`[Player] HLS Error: ${data.details}`, data);
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             hls.recoverMediaError();
           } else {
             clearTO();
             setLoading(false);
-            setError(`Erro no stream (${data.details}). Tente o VLC.`);
+            setError(`Erro de conexão (${data.details}).`);
             hls.destroy();
             hlsRef.current = null;
           }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari/iOS — native HLS support
+      // Safari/iOS
       video.src = effectiveUrl;
       video.load();
-      video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
+      video.play().catch(() => {});
     } else {
       clearTO();
-      setError('Seu navegador não suporta a tecnologia necessária para este canal.');
+      setError('Navegador incompatível com este formato.');
     }
 
     return () => {
@@ -192,7 +182,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       video.src = '';
       video.load();
     };
-  }, [url, effectiveUrl, useHls, virtualManifest]);
+  }, [url, effectiveUrl, isHls, isMp4, virtualManifest]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
