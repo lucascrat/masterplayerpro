@@ -157,63 +157,73 @@ app.get('/api/proxy', async (req, res) => {
     return;
   }
 
+  console.log(`[Proxy] Streaming: ${targetUrl}`);
+
   try {
-    // Forward Range header from client — required for iOS Safari MP4 playback.
-    // iOS Safari always sends "Range: bytes=0-1" as a preflight before playing;
-    // without forwarding it the IPTV server ignores seek/resume and iOS refuses to play.
     const rangeHeader = req.headers['range'];
     const upstreamHeaders: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      // Use a common IPTV player UA as some providers block browsers
+      'User-Agent': 'IPTVSmartersPlayer/1.0.0 (Windows NT 10.0; Win64; x64)',
       'Accept': '*/*',
+      'Connection': 'keep-alive',
     };
     if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
 
     const upstream = await axios.get(targetUrl, {
       responseType: 'stream',
-      timeout: 0,           // no timeout — live streams run indefinitely
-      maxRedirects: 5,
+      timeout: 15000,       // 15s timeout to start connection
+      maxRedirects: 10,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
       headers: upstreamHeaders,
-      // Don't throw on 206 Partial Content or other 2xx codes
-      validateStatus: (status) => status >= 200 && status < 300,
+      validateStatus: (status) => status >= 200 && status < 400,
     });
 
-    const contentType = String(upstream.headers['content-type'] || '');
+    const contentType = String(upstream.headers['content-type'] || '').toLowerCase();
     const isM3U8 = contentType.includes('mpegurl') ||
-                   contentType.includes('x-mpegURL') ||
+                   contentType.includes('x-mpegurl') ||
+                   contentType.includes('application/vnd.apple.mpegurl') ||
                    targetUrl.split('?')[0].endsWith('.m3u8');
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-    // Tell clients (especially iOS Safari) that we accept range requests
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Accept-Ranges', 'bytes');
 
     if (isM3U8) {
-      // Collect manifest text, rewrite segment/chunk URLs to go through proxy
+      console.log(`[Proxy] Processing HLS Manifest: ${targetUrl}`);
       let text = '';
       upstream.data.on('data', (chunk: Buffer) => { text += chunk.toString(); });
       upstream.data.on('end', () => {
-        // Use the FINAL url after redirects (axios follows 302s internally).
-        // The server redirects gfbegin.top → 208.122.18.50 with a token, so
-        // segment paths like /hls/hash/seg.ts belong to the redirect target,
-        // not the original host.
         const finalUrl: string = (upstream.request as any)?.res?.responseUrl || targetUrl;
         const finalParsed  = new URL(finalUrl);
-        const finalOrigin  = finalParsed.origin;                                        // http://208.122.18.50:8880
-        const finalDir     = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);     // http://208.122.18.50:8880/live/.../
+        const finalOrigin  = finalParsed.origin;
+        const finalDir     = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);
 
         const rewritten = text.split('\n').map(line => {
           const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return line;
+          if (!trimmed || trimmed.startsWith('#')) {
+            // Rewrite URI attributes in tags (e.g. #EXT-X-KEY:URI="...")
+            if (trimmed.startsWith('#') && trimmed.includes('URI=')) {
+              return line.replace(/URI=["']([^"']+)["']/g, (match, p1) => {
+                let absoluteUri = p1;
+                if (!p1.startsWith('http')) {
+                   absoluteUri = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
+                }
+                return `URI="/api/proxy?url=${encodeURIComponent(absoluteUri)}"`;
+              });
+            }
+            return line;
+          }
 
           let fullUrl: string;
-          if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-            fullUrl = trimmed;                  // already absolute
+          if (trimmed.startsWith('http')) {
+            fullUrl = trimmed;
           } else if (trimmed.startsWith('/')) {
-            fullUrl = finalOrigin + trimmed;    // absolute path → correct origin
+            fullUrl = finalOrigin + trimmed;
           } else {
-            fullUrl = finalDir + trimmed;       // relative path → final directory
+            fullUrl = finalDir + trimmed;
           }
           return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
         }).join('\n');
@@ -222,10 +232,9 @@ app.get('/api/proxy', async (req, res) => {
         res.send(rewritten);
       });
     } else {
-      // Raw stream / TS segment / MP4 — pipe directly
-      res.setHeader('Content-Type', contentType || 'video/MP2T');
+      // Raw stream pipe
+      res.setHeader('Content-Type', contentType || 'video/mp2t');
 
-      // Forward range-related headers from upstream so iOS Safari can seek
       if (upstream.headers['content-length']) {
         res.setHeader('Content-Length', upstream.headers['content-length'] as string);
       }
@@ -233,15 +242,18 @@ app.get('/api/proxy', async (req, res) => {
         res.setHeader('Content-Range', upstream.headers['content-range'] as string);
       }
 
-      // Use 206 if upstream responded with partial content, otherwise 200
       const statusCode = upstream.status === 206 ? 206 : 200;
       res.status(statusCode);
 
-      // When client disconnects (closes player), destroy upstream to free resources
-      req.on('close', () => upstream.data.destroy());
+      req.on('close', () => {
+        console.log(`[Proxy] Client closed connection for: ${targetUrl}`);
+        upstream.data.destroy();
+      });
+      
       upstream.data.pipe(res);
     }
   } catch (err: any) {
+    console.error(`[Proxy] Error streaming ${targetUrl}:`, err.message);
     if (!res.headersSent) {
       res.status(502).send('Proxy upstream error: ' + err.message);
     }

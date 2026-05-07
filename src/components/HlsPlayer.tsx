@@ -33,6 +33,12 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   const useHls      = isHlsManifest(url);
   const effectiveUrl = getEffectiveUrl(url);
 
+  // For non-HLS streams (like direct .ts links), we create a virtual manifest
+  // so hls.js can still process them as segments.
+  const virtualManifest = `data:application/vnd.apple.mpegurl;base64,${btoa(
+    `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.0,\n${effectiveUrl}`
+  )}`;
+
   const [error,   setError]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,6 +102,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const video = videoRef.current;
     if (!video) return;
 
+    console.log(`[Player] Iniciando reprodução: ${url}`);
+    console.log(`[Player] URL Efetiva: ${effectiveUrl}`);
+
     setError(null);
     setLoading(true);
     fsEnteredRef.current = false;
@@ -105,7 +114,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     // Hard timeout — show error after 25 s instead of loading forever
     timeoutRef.current = setTimeout(() => {
       setLoading(false);
-      setError('Tempo esgotado. O stream não respondeu.');
+      setError('O stream demorou muito para responder. Tente novamente ou use o VLC.');
     }, 25000);
 
     const clearTO = () => {
@@ -118,6 +127,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const onError   = () => {
       clearTO();
       setLoading(false);
+      console.error('[Player] Erro nativo do elemento <video>');
       setError('Não foi possível reproduzir este conteúdo.');
     };
 
@@ -126,51 +136,49 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('error',   onError);
 
-    if (useHls) {
-      // ── HLS manifest (.m3u8) ─────────────────────────────────────
-      // effectiveUrl is already proxied if needed (avoids XHR mixed-content block)
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 30,
-          manifestLoadingMaxRetry: 2,
-          levelLoadingMaxRetry: 2,
-          fragLoadingMaxRetry: 2,
-        });
-        hlsRef.current = hls;
-        hls.loadSource(effectiveUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-        hls.on(Hls.Events.ERROR, (_ev, data) => {
-          if (data.fatal) {
+    const sourceToLoad = useHls ? effectiveUrl : virtualManifest;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        maxBufferLength: 30,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingMaxRetry: 4,
+        fragLoadingMaxRetry: 4,
+        xhrSetup: (xhr) => {
+           xhr.withCredentials = false;
+        }
+      });
+      hlsRef.current = hls;
+      hls.loadSource(sourceToLoad);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('[Player] Manifest carregado com sucesso');
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_ev, data) => {
+        console.warn(`[Player] HLS Error: ${data.type} - ${data.details}`, data);
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          } else {
             clearTO();
             setLoading(false);
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              hls.recoverMediaError();
-            } else {
-              setError('Erro ao carregar stream HLS.');
-              hls.destroy();
-              hlsRef.current = null;
-            }
+            setError(`Erro no stream (${data.details}). Tente o VLC.`);
+            hls.destroy();
+            hlsRef.current = null;
           }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari/iOS — native HLS support, use original URL
-        video.src = url;
-        video.load();
-        video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
-      } else {
-        clearTO();
-        setError('Seu browser não suporta HLS.');
-      }
-    } else {
-      // ── Direct stream (live channels, MP4, TS without manifest) ──
-      // Use effectiveUrl (already proxied if http://) so Chrome's
-      // mixed-content blocker never sees an HTTP src on HTTPS page.
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari/iOS — native HLS support
       video.src = effectiveUrl;
       video.load();
-      video.play().catch(() => {});
+      video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true });
+    } else {
+      clearTO();
+      setError('Seu navegador não suporta a tecnologia necessária para este canal.');
     }
 
     return () => {
@@ -184,7 +192,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       video.src = '';
       video.load();
     };
-  }, [url, effectiveUrl, useHls]);
+  }, [url, effectiveUrl, useHls, virtualManifest]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
