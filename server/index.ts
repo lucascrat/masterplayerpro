@@ -157,24 +157,22 @@ app.get('/api/proxy', async (req, res) => {
     return;
   }
 
-  console.log(`[Proxy] Streaming: ${targetUrl}`);
+  // console.log(`[Proxy] Request: ${targetUrl}`);
 
   try {
     const rangeHeader = req.headers['range'];
     const upstreamHeaders: Record<string, string> = {
-      // Use a common IPTV player UA as some providers block browsers
-      'User-Agent': 'IPTVSmartersPlayer/1.0.0 (Windows NT 10.0; Win64; x64)',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': '*/*',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
       'Connection': 'keep-alive',
     };
     if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
 
     const upstream = await axios.get(targetUrl, {
       responseType: 'stream',
-      timeout: 15000,       // 15s timeout to start connection
+      timeout: 20000,       // 20s timeout
       maxRedirects: 10,
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
       headers: upstreamHeaders,
       validateStatus: (status) => status >= 200 && status < 400,
     });
@@ -182,20 +180,21 @@ app.get('/api/proxy', async (req, res) => {
     const contentType = String(upstream.headers['content-type'] || '').toLowerCase();
     const isM3U8 = contentType.includes('mpegurl') ||
                    contentType.includes('x-mpegurl') ||
-                   contentType.includes('application/vnd.apple.mpegurl') ||
                    targetUrl.split('?')[0].endsWith('.m3u8');
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
     res.setHeader('Accept-Ranges', 'bytes');
 
     if (isM3U8) {
-      console.log(`[Proxy] Processing HLS Manifest: ${targetUrl}`);
       let text = '';
       upstream.data.on('data', (chunk: Buffer) => { text += chunk.toString(); });
       upstream.data.on('end', () => {
+        if (!text.trim()) {
+          res.status(502).send('Upstream returned empty manifest');
+          return;
+        }
+
         const finalUrl: string = (upstream.request as any)?.res?.responseUrl || targetUrl;
         const finalParsed  = new URL(finalUrl);
         const finalOrigin  = finalParsed.origin;
@@ -203,20 +202,20 @@ app.get('/api/proxy', async (req, res) => {
 
         const rewritten = text.split('\n').map(line => {
           const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) {
-            // Rewrite URI attributes in tags (e.g. #EXT-X-KEY:URI="...")
-            if (trimmed.startsWith('#') && trimmed.includes('URI=')) {
-              return line.replace(/URI=["']([^"']+)["']/g, (match, p1) => {
-                let absoluteUri = p1;
-                if (!p1.startsWith('http')) {
-                   absoluteUri = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
-                }
-                return `URI="/api/proxy?url=${encodeURIComponent(absoluteUri)}"`;
-              });
-            }
-            return line;
+          if (!trimmed) return line;
+          
+          if (trimmed.startsWith('#')) {
+            // Rewrite URI="..." in any tag
+            return line.replace(/URI=["']([^"']+)["']/g, (match, p1) => {
+              let absoluteUri = p1;
+              if (!p1.startsWith('http')) {
+                 absoluteUri = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
+              }
+              return `URI="/api/proxy?url=${encodeURIComponent(absoluteUri)}"`;
+            });
           }
 
+          // Rewrite stream/segment URLs
           let fullUrl: string;
           if (trimmed.startsWith('http')) {
             fullUrl = trimmed;
@@ -232,30 +231,21 @@ app.get('/api/proxy', async (req, res) => {
         res.send(rewritten);
       });
     } else {
-      // Raw stream pipe
       res.setHeader('Content-Type', contentType || 'video/mp2t');
-
-      if (upstream.headers['content-length']) {
-        res.setHeader('Content-Length', upstream.headers['content-length'] as string);
-      }
-      if (upstream.headers['content-range']) {
-        res.setHeader('Content-Range', upstream.headers['content-range'] as string);
-      }
+      if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length'] as string);
+      if (upstream.headers['content-range']) res.setHeader('Content-Range', upstream.headers['content-range'] as string);
 
       const statusCode = upstream.status === 206 ? 206 : 200;
       res.status(statusCode);
-
-      req.on('close', () => {
-        console.log(`[Proxy] Client closed connection for: ${targetUrl}`);
-        upstream.data.destroy();
-      });
-      
+      req.on('close', () => upstream.data.destroy());
       upstream.data.pipe(res);
     }
   } catch (err: any) {
-    console.error(`[Proxy] Error streaming ${targetUrl}:`, err.message);
+    console.error(`[Proxy Error] ${targetUrl} -> ${err.message}`);
     if (!res.headersSent) {
-      res.status(502).send('Proxy upstream error: ' + err.message);
+      // Return a 502 with the message so the client can show it
+      res.status(502).setHeader('Content-Type', 'text/plain');
+      res.send(`Erro no servidor de stream: ${err.message}`);
     }
   }
 });

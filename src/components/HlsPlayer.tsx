@@ -155,7 +155,15 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           } else {
             clearTO();
             setLoading(false);
-            setError(`Erro de conexão (${data.details}).`);
+            
+            let errorMsg = `Erro no stream (${data.details}).`;
+            if (data.response && data.response.code === 502) {
+               errorMsg = 'O servidor de IPTV não respondeu. Tente novamente.';
+            } else if (data.details === 'manifestParsingError') {
+               errorMsg = 'Falha ao processar o canal. Pode estar offline.';
+            }
+
+            setError(errorMsg);
             hls.destroy();
             hlsRef.current = null;
           }
