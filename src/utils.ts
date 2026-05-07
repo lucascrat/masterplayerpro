@@ -103,7 +103,11 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
       const res = await fetch(proxyUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(`Proxy 1 falhou: ${res.status}`);
-      return await res.text();
+      const text = await res.text();
+      if (text.includes('Oops... Really?') || text.includes('<!DOCTYPE html>')) {
+        throw new Error('Proxy 1 retornou uma página de erro');
+      }
+      return text;
     },
     // Método 3: Proxy CorsProxy.io
     async () => {
@@ -111,7 +115,11 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
       const res = await fetch(proxyUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(`Proxy 2 falhou: ${res.status}`);
-      return await res.text();
+      const text = await res.text();
+      if (text.includes('<!DOCTYPE html>')) {
+        throw new Error('Proxy 2 retornou HTML ao invés de M3U');
+      }
+      return text;
     },
     // Método 4: Proxy AllOrigins (Get - JSON Wrapper)
     async () => {
@@ -119,12 +127,26 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
       const res = await fetch(proxyUrl, { cache: 'no-store' });
       const body = await res.text();
+      
+      if (!body || body.includes('Oops... Really?') || body.includes('<!DOCTYPE html>')) {
+        throw new Error('Proxy 3 retornou uma página de erro ou corpo vazio');
+      }
+
       try {
         const data = JSON.parse(body);
-        if (data.contents) return data.contents;
+        if (data.contents) {
+          if (data.contents.includes('<!DOCTYPE html>')) {
+            throw new Error('Conteúdo do Proxy 3 é HTML (erro do provedor)');
+          }
+          return data.contents;
+        }
         throw new Error('Formato JSON inválido no Proxy 3');
-      } catch (e) {
-        throw new Error('Proxy 3 retornou conteúdo não-JSON');
+      } catch (e: any) {
+        // Se for o erro de JSON, simplifica a mensagem para não assustar o usuário
+        if (e.message.includes('Unexpected token') || e.message.includes('is not valid JSON')) {
+          throw new Error('O servidor de proxy retornou uma resposta inválida (não-JSON)');
+        }
+        throw e;
       }
     }
   ];
@@ -134,13 +156,15 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
       text = await method();
       if (text && text.trim().length > 0) break;
     } catch (e: any) {
-      console.warn(e.message);
+      console.warn('Falha no método de busca:', e.message);
       errorDetail = e.message;
     }
   }
 
   if (!text || text.trim().length === 0) {
-    throw new Error(`Não foi possível baixar a lista. Detalhe: ${errorDetail || 'Todos os servidores de proxy falharam.'}`);
+    // Se chegamos aqui, todos falharam. Mostramos o último erro ou um genérico.
+    const msg = errorDetail || 'Todos os servidores de proxy falharam.';
+    throw new Error(`Não foi possível carregar a lista. Detalhe: ${msg}`);
   }
 
   // Verifica se é uma lista M3U válida, mas tenta ser flexível
