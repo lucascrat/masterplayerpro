@@ -1,5 +1,5 @@
 // Version: 1.0.1 - Force Cache Refresh for Serverless Migration
-import { StrictMode, Suspense, lazy } from 'react'
+import { Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
@@ -20,15 +20,16 @@ registerSW({
   },
 });
 
+// NOTE: no <StrictMode> — its dev-mode double-invoke of effects makes the
+// video player open TWO upstream connections per play, which trips the
+// IPTV provider's simultaneous-connection limit and stalls playback.
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
-        <Routes>
-          <Route path="/admin/*" element={<Admin />} />
-          <Route path="/*" element={<App />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  </StrictMode>,
+  <BrowserRouter>
+    <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
+      <Routes>
+        <Route path="/admin/*" element={<Admin />} />
+        <Route path="/*" element={<App />} />
+      </Routes>
+    </Suspense>
+  </BrowserRouter>,
 )

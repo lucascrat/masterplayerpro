@@ -118,7 +118,7 @@ export function stripQuality(name: string): string {
  * and 4K IPTV variants are nearly always HEVC + the flakiest source.
  * H265/4K are still kept in `item.variants` for the manual quality picker.
  */
-function qualityRank(name: string): number {
+export function qualityRank(name: string): number {
   const m = name.match(QUALITY_SUFFIX_RE);
   if (!m) return 4;
   const q = m[0].toUpperCase();

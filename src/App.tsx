@@ -3,7 +3,7 @@ import * as api from './lib/api';
 import { ApiError } from './lib/api';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
-import { generateMAC } from './utils';
+import { generateMAC, qualityRank as variantPlayScore } from './utils';
 
 // Pages — login lands eagerly; the rest are split per route.
 import LoginScreen from './pages/client/LoginScreen';
@@ -40,6 +40,9 @@ export default function App() {
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>('login');
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  // Ordered fallback URLs (quality variants) for the currently-playing item —
+  // the player auto-advances through these if a stream stalls or errors.
+  const [playingFallbacks, setPlayingFallbacks] = useState<string[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
@@ -239,9 +242,28 @@ export default function App() {
   const handleBack = () => setCurrentPage('home');
   const goSearch = useCallback(() => setCurrentPage('search'), []);
 
+  // Start playback. For live channels `item.variants` holds the quality
+  // variants (best-first is NOT guaranteed, so we order them worst-risk-last):
+  // plain H.264 FHD/HD first, HEVC/4K last — the player falls back down this
+  // list if a stream stalls.
+  const handlePlay = useCallback((url: string, item?: M3UItem) => {
+    const variants = item?.variants ?? [];
+    if (variants.length > 1) {
+      const ordered = [...variants].sort((a, b) => variantPlayScore(b.name) - variantPlayScore(a.name));
+      const urls = ordered.map(v => v.url);
+      // Make sure the explicitly-requested url is tried first.
+      const rest = urls.filter(u => u !== url);
+      setPlayingFallbacks([url, ...rest]);
+    } else {
+      setPlayingFallbacks([]);
+    }
+    setPlayingUrl(url);
+  }, []);
+
   // When the user stops watching, tell the server immediately (faster release)
   const handleStopPlaying = useCallback(() => {
     setPlayingUrl(null);
+    setPlayingFallbacks([]);
     if (sessionRef.current?.sessionId) api.heartbeat(sessionRef.current.sessionId, false);
   }, []);
 
@@ -300,7 +322,7 @@ export default function App() {
         <LiveTvPage
           items={playlist?.live || []}
           onBack={handleBack}
-          onPlay={setPlayingUrl}
+          onPlay={handlePlay}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -312,7 +334,7 @@ export default function App() {
           title="Filmes"
           items={playlist?.movies || []}
           onBack={handleBack}
-          onPlay={setPlayingUrl}
+          onPlay={handlePlay}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -324,7 +346,7 @@ export default function App() {
           title="Séries"
           items={playlist?.series || []}
           onBack={handleBack}
-          onPlay={setPlayingUrl}
+          onPlay={handlePlay}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -342,7 +364,7 @@ export default function App() {
             url: f.itemUrl,
           }))}
           onBack={handleBack}
-          onPlay={setPlayingUrl}
+          onPlay={handlePlay}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
         />
@@ -352,7 +374,7 @@ export default function App() {
         <SearchPage
           playlist={playlist}
           onBack={handleBack}
-          onPlay={setPlayingUrl}
+          onPlay={handlePlay}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
         />
@@ -375,7 +397,7 @@ export default function App() {
             <div className="spinner" />
           </div>
         }>
-          <HlsPlayer url={playingUrl} onClose={handleStopPlaying} />
+          <HlsPlayer url={playingUrl} fallbackUrls={playingFallbacks} onClose={handleStopPlaying} />
         </Suspense>
       )}
 

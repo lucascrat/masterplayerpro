@@ -13,6 +13,9 @@ function fmtTime(sec: number): string {
 
 interface HlsPlayerProps {
   url: string;
+  /** Ordered quality-variant URLs to fall back through if a stream stalls.
+   *  Element 0 is normally the same as `url`. Empty/omitted = no fallback. */
+  fallbackUrls?: string[];
   onClose: () => void;
 }
 
@@ -28,29 +31,34 @@ function getEffectiveUrl(url: string): string {
   return url;
 }
 
-export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
+export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const hlsRef       = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
 
-  // Improved detection
-  const isHls = url.toLowerCase().includes('.m3u8') || url.toLowerCase().includes('/hls/');
-  const isMp4 = url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.mkv');
+  // Candidate URLs to try, in order. Falls back to just [url] when no variants.
+  const candidates = (fallbackUrls && fallbackUrls.length > 0) ? fallbackUrls : [url];
+
+  const [error,     setError]     = useState<string | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [retry,     setRetry]     = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // New item selected upstream → restart from the first candidate.
+  useEffect(() => { setActiveIdx(0); setRetry(0); }, [url]);
+
+  const activeUrl = candidates[Math.min(activeIdx, candidates.length - 1)] || url;
+  const hasNextCandidate = activeIdx < candidates.length - 1;
+
+  // Improved detection (based on the URL actually being played)
+  const isHls = activeUrl.toLowerCase().includes('.m3u8') || activeUrl.toLowerCase().includes('/hls/');
+  const isMp4 = activeUrl.toLowerCase().includes('.mp4') || activeUrl.toLowerCase().includes('.mkv');
   // Anything that is neither HLS nor MP4 is treated as a raw TS stream and
   // wrapped in a virtual HLS manifest below.
 
-  const effectiveUrl = getEffectiveUrl(url);
-
-  // Virtual HLS manifest (only for TS streams)
-  const virtualManifest = `data:application/vnd.apple.mpegurl;base64,${btoa(
-    `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.0,\n${effectiveUrl}`
-  )}`;
-
-  const [error,   setError]   = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [retry,   setRetry]   = useState(0);
+  const effectiveUrl = getEffectiveUrl(activeUrl);
 
   // ── Fullscreen ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,22 +114,50 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const video = videoRef.current;
     if (!video) return;
 
-    console.log(`[Player] Iniciando: ${url}`);
+    // Guard against a double-invoke (StrictMode / fast remount) opening two
+    // upstream connections for the same stream — IPTV providers cap
+    // simultaneous connections and the 2nd one stalls both.
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+
+    console.log(`[Player] Iniciando (${activeIdx + 1}/${candidates.length}): ${activeUrl}`);
     console.log(`[Player] Tipo Detectado: ${isHls ? 'HLS' : isMp4 ? 'MP4/Direct' : 'TS/Wrap'}`);
+
+    // Virtual HLS manifest wrapper for raw TS streams (computed here so it
+    // never lands in the effect dep array).
+    const virtualManifest = `data:application/vnd.apple.mpegurl;base64,${btoa(
+      `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10.0,\n${effectiveUrl}`
+    )}`;
 
     setError(null);
     setLoading(true);
     fsEnteredRef.current = false;
 
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setLoading(false);
-      setError('O servidor demorou muito para responder. Tente o VLC.');
-    }, 25000);
-
     const clearTO = () => {
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
+
+    // A stream failed (stall/timeout/fatal error). If we still have another
+    // quality variant to try, silently advance to it; otherwise surface the
+    // error screen.
+    let failed = false;
+    const failStream = (msg: string) => {
+      if (failed) return;
+      failed = true;
+      clearTO();
+      if (hasNextCandidate) {
+        console.log(`[Player] Variante ${activeIdx + 1} falhou — tentando a próxima…`);
+        toast('Tentando outra qualidade…', 'info', 2500);
+        setActiveIdx(i => i + 1);
+      } else {
+        setLoading(false);
+        setError(msg);
+      }
+    };
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      failStream('O servidor demorou muito para responder. Tente o VLC.');
+    }, 20000);
 
     // ── Resume where the user left off (VOD only; live streams have no
     //    finite duration so saveProgress simply ignores them) ──────────
@@ -156,10 +192,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const onLoadedMeta = () => maybeResume();
     const onWaiting = () => setLoading(true);
     const onError   = () => {
-      clearTO();
-      setLoading(false);
       console.error('[Player] Erro no elemento video');
-      setError('Não foi possível reproduzir este conteúdo.');
+      failStream('Não foi possível reproduzir este conteúdo.');
     };
 
     video.addEventListener('playing', onPlaying);
@@ -213,8 +247,6 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           return;
         }
 
-        clearTO();
-        setLoading(false);
         let errorMsg = 'Não foi possível reproduzir este conteúdo.';
         if (data.response && (data.response.code === 502 || data.response.code === 504)) {
           errorMsg = 'O servidor de IPTV não respondeu. Tente novamente em instantes.';
@@ -223,9 +255,9 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
         } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           errorMsg = 'Conexão instável com o servidor de streaming.';
         }
-        setError(errorMsg);
         hls.destroy();
         hlsRef.current = null;
+        failStream(errorMsg);
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari/iOS
@@ -246,12 +278,16 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('error',   onError);
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      if (hlsRef.current) {
+        try { hlsRef.current.stopLoad(); } catch { /* noop */ }
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
       video.pause();
-      video.src = '';
+      video.removeAttribute('src');
       video.load();
     };
-  }, [url, effectiveUrl, isHls, isMp4, virtualManifest, retry]);
+  }, [url, effectiveUrl, isHls, isMp4, retry, activeIdx]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -308,7 +344,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           }}>{error}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button
-              onClick={() => { setError(null); setLoading(true); setRetry(r => r + 1); }}
+              onClick={() => { setError(null); setLoading(true); setActiveIdx(0); setRetry(r => r + 1); }}
               style={{
                 background: '#8B5CF6', color: '#fff', border: 'none',
                 borderRadius: 8, padding: '10px 24px',
@@ -329,7 +365,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
               ← Voltar
             </button>
             <a
-              href={`vlc://${url}`}
+              href={`vlc://${activeUrl}`}
               style={{
                 background: 'rgba(255,255,255,0.1)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.25)',
