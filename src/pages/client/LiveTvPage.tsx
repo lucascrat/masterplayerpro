@@ -199,7 +199,7 @@ export default function LiveTvPage({
       {qualityItem && (
         <QualityPicker
           item={qualityItem}
-          onPlay={url => onPlay(url)}
+          onPlay={onPlay}   /* pass through — the 2nd arg carries the quality variants */
           onClose={() => setQualityItem(null)}
         />
       )}

@@ -298,8 +298,15 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
           return;
         }
 
+        const code = data.response?.code;
         let errorMsg = 'Não foi possível reproduzir este conteúdo.';
-        if (data.response && (data.response.code === 502 || data.response.code === 504)) {
+        if (code === 429) {
+          errorMsg = 'O provedor limitou este canal agora (muitas conexões). Tente outra qualidade ou aguarde alguns minutos.';
+        } else if (code === 403) {
+          errorMsg = 'Acesso negado pelo provedor neste canal.';
+        } else if (code === 404 || code === 410) {
+          errorMsg = 'Este canal saiu do ar no provedor.';
+        } else if (code === 502 || code === 504) {
           errorMsg = 'O servidor de IPTV não respondeu. Tente novamente em instantes.';
         } else if (data.details === 'manifestParsingError' || data.details === 'manifestLoadError') {
           errorMsg = 'Falha ao carregar o canal. Ele pode estar offline.';

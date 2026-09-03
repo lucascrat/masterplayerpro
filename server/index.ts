@@ -241,6 +241,14 @@ app.get('/api/proxy', async (req, res) => {
         }
         return;
       }
+      // A definitive verdict from the provider (rate-limited / blocked / gone)
+      // won't change by retrying from our datacenter IP — surface it now.
+      if ([403, 404, 410, 429].includes(r.status)) {
+        console.warn(`[Proxy] relay: upstream ${r.status} for ${targetUrl.split('?')[0]}`);
+        res.status(r.status).setHeader('Content-Type', 'text/plain');
+        res.send(`Upstream ${r.status}`);
+        return;
+      }
       console.warn(`[Proxy] relay returned ${r.status} for ${targetUrl.split('?')[0]}, falling back`);
     } catch (e: any) {
       console.warn(`[Proxy] relay failed (${e.message}), falling back to direct/proxy`);
@@ -337,10 +345,13 @@ app.get('/api/proxy', async (req, res) => {
       upstream.data.pipe(res);
     }
   } catch (err: any) {
-    console.error(`[Proxy Error] ${targetUrl} -> ${err.message}`);
+    const upstreamStatus = err?.response?.status;
+    console.error(`[Proxy Error] ${targetUrl.split('?')[0]} -> ${err.message}${upstreamStatus ? ` (upstream ${upstreamStatus})` : ''}`);
     if (!res.headersSent) {
-      // Return a 502 with the message so the client can show it
-      res.status(502).setHeader('Content-Type', 'text/plain');
+      // Forward a definitive upstream verdict (429 rate-limited, 403 blocked,
+      // 404 gone) so the player can say something useful instead of "timeout".
+      const passthrough = [403, 404, 410, 429].includes(upstreamStatus) ? upstreamStatus : 502;
+      res.status(passthrough).setHeader('Content-Type', 'text/plain');
       res.send(`Erro no servidor de stream: ${err.message}`);
     }
   }
