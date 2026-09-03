@@ -84,111 +84,129 @@ function classifyType(group: string, name: string): 'live' | 'movie' | 'series' 
   return 'live';
 }
 
+// fetch() that aborts after `ms` so one dead proxy can't stall the whole chain.
+async function fetchWithTimeout(input: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(input, { cache: 'no-store', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function looksLikeError(body: string): boolean {
+  const head = body.slice(0, 400).toLowerCase();
+  return head.includes('<!doctype html') || head.includes('<html') ||
+    head.includes('oops... really?') || head.includes('access denied');
+}
+
 export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
   let text = '';
   let errorDetail = '';
 
-  const fetchMethods = [
-    // Método 1: Fetch Direto
-    async () => {
-      console.log('Tentando Fetch Direto...');
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.text();
-    },
-    // Método 2: Proxy AllOrigins (Raw)
-    async () => {
-      console.log('Tentando Proxy 1 (AllOrigins Raw)...');
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Proxy 1 falhou: ${res.status}`);
-      const text = await res.text();
-      if (text.includes('Oops... Really?') || text.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 1 retornou erro HTML');
-      }
-      return text;
-    },
-    // Método 3: Proxy CorsProxy.io
-    async () => {
-      console.log('Tentando Proxy 2 (CorsProxy.io)...');
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Proxy 2 falhou: ${res.status}`);
-      const text = await res.text();
-      if (text.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 2 retornou HTML');
-      }
-      return text;
-    },
-    // Método 4: Proxy CodeTabs (Resiliente)
-    async () => {
-      console.log('Tentando Proxy 3 (CodeTabs)...');
-      const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Proxy 3 falhou: ${res.status}`);
-      const text = await res.text();
-      if (text.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 3 retornou HTML');
-      }
-      return text;
-    },
-    // Método 5: Proxy AllOrigins (Get - JSON Wrapper)
-    async () => {
-      console.log('Tentando Proxy 4 (AllOrigins Get)...');
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl, { cache: 'no-store' });
-      const body = await res.text();
-      
-      if (!body || body.includes('Oops... Really?') || body.includes('<!DOCTYPE html>')) {
-        throw new Error('Proxy 4 retornou erro ou corpo vazio');
-      }
+  const PER_TRY_TIMEOUT = 20000;
 
-      try {
-        const data = JSON.parse(body);
-        if (data.contents) {
-          if (data.contents.includes('<!DOCTYPE html>')) {
-            throw new Error('Conteúdo do Proxy 4 é HTML (erro do provedor)');
-          }
-          return data.contents;
+  const fetchMethods: { label: string; run: () => Promise<string> }[] = [
+    {
+      // Método 1: proxy do próprio servidor (quando o app é servido pelo Express).
+      // Sem CORS, sem proxy de terceiros — é o caminho mais confiável.
+      label: 'API do servidor (/api/m3u)',
+      run: async () => {
+        const res = await fetchWithTimeout(`/api/m3u?url=${encodeURIComponent(url)}`, 60000);
+        if (!res.ok) throw new Error(`API respondeu ${res.status}`);
+        const body = await res.text();
+        if (looksLikeError(body)) throw new Error('API retornou uma página de erro');
+        return body;
+      },
+    },
+    {
+      label: 'Fetch direto',
+      run: async () => {
+        const res = await fetchWithTimeout(url, PER_TRY_TIMEOUT);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.text();
+      },
+    },
+    {
+      label: 'AllOrigins (raw)',
+      run: async () => {
+        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, PER_TRY_TIMEOUT);
+        if (!res.ok) throw new Error(`proxy respondeu ${res.status}`);
+        const body = await res.text();
+        if (looksLikeError(body)) throw new Error('proxy retornou HTML de erro');
+        return body;
+      },
+    },
+    {
+      label: 'CodeTabs',
+      run: async () => {
+        const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, PER_TRY_TIMEOUT);
+        if (!res.ok) throw new Error(`proxy respondeu ${res.status}`);
+        const body = await res.text();
+        if (looksLikeError(body)) throw new Error('proxy retornou HTML de erro');
+        return body;
+      },
+    },
+    {
+      label: 'corsproxy.io',
+      run: async () => {
+        const res = await fetchWithTimeout(`https://corsproxy.io/?url=${encodeURIComponent(url)}`, PER_TRY_TIMEOUT);
+        if (!res.ok) throw new Error(`proxy respondeu ${res.status}`);
+        const body = await res.text();
+        if (looksLikeError(body)) throw new Error('proxy retornou HTML de erro');
+        return body;
+      },
+    },
+    {
+      label: 'AllOrigins (get/json)',
+      run: async () => {
+        const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, PER_TRY_TIMEOUT);
+        const raw = await res.text();
+        if (!raw || looksLikeError(raw)) throw new Error('proxy retornou corpo vazio ou de erro');
+        let data: { contents?: string };
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error('proxy retornou resposta não-JSON');
         }
-        throw new Error('Formato JSON inválido no Proxy 4');
-      } catch (e: any) {
-        if (e.message.includes('Unexpected token') || e.message.includes('is not valid JSON')) {
-          throw new Error('O servidor de proxy retornou uma resposta inválida (não-JSON)');
-        }
-        throw e;
-      }
-    }
+        if (!data.contents || looksLikeError(data.contents)) throw new Error('conteúdo do proxy é HTML de erro');
+        return data.contents;
+      },
+    },
   ];
 
-  for (const method of fetchMethods) {
+  for (const { label, run } of fetchMethods) {
     try {
-      text = await method();
-      if (text && text.trim().length > 0) break;
+      console.log(`[M3U] Tentando: ${label}`);
+      const body = await run();
+      if (body && body.trim().length > 0) {
+        text = body;
+        console.log(`[M3U] OK via ${label} (${(body.length / 1024).toFixed(0)} KB)`);
+        break;
+      }
     } catch (e: any) {
-      console.warn('Falha no método de busca:', e.message);
-      errorDetail = e.message;
+      const reason = e?.name === 'AbortError' ? 'tempo esgotado' : (e?.message || 'erro desconhecido');
+      console.warn(`[M3U] Falhou (${label}): ${reason}`);
+      errorDetail = `${label}: ${reason}`;
     }
   }
 
   if (!text || text.trim().length === 0) {
-    // Se chegamos aqui, todos falharam. Mostramos o último erro ou um genérico.
-    const msg = errorDetail || 'Todos os servidores de proxy falharam.';
-    throw new Error(`Não foi possível carregar a lista. Detalhe: ${msg}`);
+    throw new Error(`Não foi possível carregar a lista. Último erro — ${errorDetail || 'todos os métodos falharam'}.`);
   }
 
-  // Verifica se é uma lista M3U válida, mas tenta ser flexível
-  const textPreview = text.substring(0, 100).replace(/\n/g, ' ');
-  console.log(`Início do conteúdo recebido: "${textPreview}..."`);
+  // Remove BOM e espaços iniciais que quebram a detecção das tags
+  text = text.replace(/^\uFEFF/, '').replace(/^\s+/, '');
 
-  if (!text.includes('#EXTM3U') && !text.includes('#EXTINF')) {
-    throw new Error('O arquivo retornado não parece ser uma lista M3U válida.');
+  if (!text.includes('#EXTINF')) {
+    throw new Error('O arquivo retornado não parece ser uma lista M3U válida (nenhuma entrada #EXTINF).');
   }
 
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items: M3UItem[] = [];
-  
-  console.log(`Processando ${lines.length} linhas de texto...`);
+
+  console.log(`[M3U] Processando ${lines.length} linhas...`);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -235,6 +253,6 @@ export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
     i = nextIdx; // Pula para a linha do URL
   }
 
-  console.log(`Parsing concluído: ${items.length} itens extraídos.`);
+  console.log(`[M3U] Parsing concluído: ${items.length} itens extraídos.`);
   return items;
 }

@@ -250,6 +250,51 @@ app.get('/api/proxy', async (req, res) => {
   }
 });
 
+// ── M3U text proxy ───────────────────────────────────────────────────────────
+// Fetches a playlist M3U server-side and returns the RAW text untouched (no URL
+// rewriting, unlike /api/proxy). The client uses this as its first, most
+// reliable option to load the playlist — no CORS, no flaky third-party proxies.
+app.get('/api/m3u', async (req, res) => {
+  const targetUrl = String(req.query['url'] || '');
+  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
+    res.status(400).send('Missing or invalid url parameter');
+    return;
+  }
+
+  try {
+    const upstream = await axios.get(targetUrl, {
+      responseType: 'text',
+      timeout: 45000,
+      maxRedirects: 10,
+      maxContentLength: 80 * 1024 * 1024, // 80 MB cap
+      maxBodyLength: 80 * 1024 * 1024,
+      transformResponse: (d) => d, // keep as string
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      },
+      validateStatus: (s) => s >= 200 && s < 400,
+    });
+
+    const body = typeof upstream.data === 'string' ? upstream.data : String(upstream.data ?? '');
+    if (!body.trim()) {
+      res.status(502).send('Upstream returned an empty playlist');
+      return;
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(body);
+  } catch (err: any) {
+    console.error(`[M3U Proxy Error] ${targetUrl.split('?')[0]} -> ${err.message}`);
+    if (!res.headersSent) {
+      res.status(502).setHeader('Content-Type', 'text/plain');
+      res.send(`Falha ao baixar a lista: ${err.message}`);
+    }
+  }
+});
+
 // TMDB API proxy (token stays on server)
 app.get('/api/tmdb/movie', async (req, res) => {
   const name = String(req.query['name'] || '');

@@ -40,6 +40,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
   const [error,   setError]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retry,   setRetry]   = useState(0);
 
   // ── Fullscreen ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -138,33 +139,52 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
         enableWorker: true,
         manifestLoadingMaxRetry: 4,
         levelLoadingMaxRetry: 4,
+        fragLoadingMaxRetry: 6,
       });
       hlsRef.current = hls;
       const source = isHls ? effectiveUrl : virtualManifest;
+
+      // Bounded self-healing: recover a few times before surfacing an error.
+      let netRetries = 0;
+      let mediaRetries = 0;
+      const MAX_NET_RETRIES = 3;
+      const MAX_MEDIA_RETRIES = 2;
+
       hls.loadSource(source);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       hls.on(Hls.Events.ERROR, (_ev, data) => {
-        console.warn(`[Player] HLS Error: ${data.details}`, data);
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
-          } else {
-            clearTO();
-            setLoading(false);
-            
-            let errorMsg = `Erro no stream (${data.details}).`;
-            if (data.response && data.response.code === 502) {
-               errorMsg = 'O servidor de IPTV não respondeu. Tente novamente.';
-            } else if (data.details === 'manifestParsingError') {
-               errorMsg = 'Falha ao processar o canal. Pode estar offline.';
-            }
+        console.warn(`[Player] HLS Error: ${data.details} (fatal=${data.fatal})`);
+        if (!data.fatal) return;
 
-            setError(errorMsg);
-            hls.destroy();
-            hlsRef.current = null;
-          }
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries < MAX_NET_RETRIES) {
+          netRetries++;
+          console.log(`[Player] Reconectando (${netRetries}/${MAX_NET_RETRIES})...`);
+          setLoading(true);
+          setTimeout(() => hls.startLoad(), 1000 * netRetries);
+          return;
         }
+
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < MAX_MEDIA_RETRIES) {
+          mediaRetries++;
+          console.log(`[Player] Recuperando erro de mídia (${mediaRetries}/${MAX_MEDIA_RETRIES})...`);
+          hls.recoverMediaError();
+          return;
+        }
+
+        clearTO();
+        setLoading(false);
+        let errorMsg = 'Não foi possível reproduzir este conteúdo.';
+        if (data.response && (data.response.code === 502 || data.response.code === 504)) {
+          errorMsg = 'O servidor de IPTV não respondeu. Tente novamente em instantes.';
+        } else if (data.details === 'manifestParsingError' || data.details === 'manifestLoadError') {
+          errorMsg = 'Falha ao carregar o canal. Ele pode estar offline.';
+        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          errorMsg = 'Conexão instável com o servidor de streaming.';
+        }
+        setError(errorMsg);
+        hls.destroy();
+        hlsRef.current = null;
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari/iOS
@@ -187,7 +207,7 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       video.src = '';
       video.load();
     };
-  }, [url, effectiveUrl, isHls, isMp4, virtualManifest]);
+  }, [url, effectiveUrl, isHls, isMp4, virtualManifest, retry]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -244,9 +264,20 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
           }}>{error}</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button
-              onClick={handleClose}
+              onClick={() => { setError(null); setLoading(true); setRetry(r => r + 1); }}
               style={{
                 background: '#8B5CF6', color: '#fff', border: 'none',
+                borderRadius: 8, padding: '10px 24px',
+                fontSize: '0.9rem', cursor: 'pointer', fontWeight: 600,
+              }}
+            >
+              ↻ Tentar novamente
+            </button>
+            <button
+              onClick={handleClose}
+              style={{
+                background: 'rgba(255,255,255,0.1)', color: '#fff',
+                border: '1px solid rgba(255,255,255,0.25)',
                 borderRadius: 8, padding: '10px 24px',
                 fontSize: '0.9rem', cursor: 'pointer', fontWeight: 600,
               }}
