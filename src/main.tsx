@@ -9,14 +9,29 @@ import App from './App.tsx'
 // Admin panel is a separate bundle — regular viewers never download it.
 const Admin = lazy(() => import('./Admin.tsx'))
 
-// Register service worker with auto-update
-registerSW({
+// Service worker: apply new versions immediately and keep checking. A stale
+// cached bundle in an installed PWA / long-lived Chrome tab was serving the
+// old (broken) player. This forces the update through and reloads once.
+const updateSW = registerSW({
+  immediate: true,
   onNeedRefresh() {
-    // New content available — auto update silently
-    console.log('[PWA] New version available, updating...');
+    console.log('[PWA] new version — applying');
+    updateSW(true); // skipWaiting + reload
+  },
+  onRegisteredSW(_swUrl, reg) {
+    if (!reg) return;
+    // Nuke any legacy runtime caches (old builds cached /api/proxy responses).
+    if ('caches' in window) {
+      caches.keys().then(keys => keys.forEach(k => {
+        if (k.startsWith('api-cache') || k.startsWith('workbox-runtime')) caches.delete(k);
+      })).catch(() => {});
+    }
+    // Poll for updates so an always-open PWA doesn't sit on an old build.
+    reg.update().catch(() => {});
+    setInterval(() => reg.update().catch(() => {}), 60_000);
   },
   onOfflineReady() {
-    console.log('[PWA] App ready to work offline');
+    console.log('[PWA] ready to work offline');
   },
 });
 
