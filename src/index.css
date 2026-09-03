@@ -2282,3 +2282,246 @@ h1, h2, h3, h4 {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ==========================================
+   LIVE TV – SUBCATEGORY PILLS & QUALITY
+   ========================================== */
+
+/* Wrapper: right side of the content layout */
+.channel-list-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Horizontal scroll pill row */
+.subcategory-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.subcategory-pills::-webkit-scrollbar { display: none; }
+
+.subcat-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.18s;
+  flex-shrink: 0;
+  font-family: var(--font-main);
+}
+.subcat-pill:hover {
+  background: rgba(139,92,246,0.15);
+  border-color: rgba(139,92,246,0.4);
+  color: #fff;
+}
+.subcat-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.subcat-count {
+  background: rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.6);
+}
+.subcat-pill.active .subcat-count {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+/* Quality badge on channel row */
+.quality-badge-inline {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.quality-variants-hint {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Dedup toggle button (header) */
+.dedup-toggle-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0 10px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  font-family: var(--font-main);
+  letter-spacing: 0.05em;
+}
+.dedup-toggle-btn:hover {
+  background: rgba(139,92,246,0.15);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dedup-toggle-btn.active {
+  background: rgba(139,92,246,0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Quality Picker Modal ──────────────────────────── */
+.quality-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(6px);
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.quality-picker-sheet {
+  background: #18181b;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 1.25rem 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1.5px solid rgba(255,255,255,0.1);
+}
+
+.quality-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.quality-picker-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+
+.quality-picker-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+.quality-picker-sub {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 2px;
+}
+
+.quality-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quality-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: var(--font-main);
+  text-align: left;
+}
+.quality-option:hover {
+  background: rgba(139,92,246,0.12);
+  border-color: rgba(139,92,246,0.35);
+}
+
+.quality-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05em;
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.quality-option-name {
+  flex: 1;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quality-play-icon {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+.quality-option:hover .quality-play-icon { color: var(--accent); }
+
+.quality-picker-close {
+  margin-top: 6px;
+  padding: 0.85rem;
+  border-radius: 14px;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: var(--font-main);
+}
+.quality-picker-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+@media (max-width: 768px) {
+  .subcategory-pills { padding: 8px 12px; gap: 6px; }
+  .subcat-pill { padding: 5px 11px; font-size: 0.76rem; }
+  .quality-picker-sheet { border-radius: 16px 16px 0 0; padding: 1rem 0.75rem 1.5rem; }
+}
