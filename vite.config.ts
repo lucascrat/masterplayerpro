@@ -64,8 +64,14 @@ export default defineConfig({
             },
           },
           {
-            // Cache API calls (short TTL)
-            urlPattern: /^\/api\/.*/i,
+            // Cache only safe, idempotent API reads (TMDB metadata etc).
+            // NEVER cache /api/proxy or /api/m3u — those stream live media
+            // with short-lived signed tokens; a replayed cache entry = a
+            // dead stream / expired token.
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.startsWith('/api/') &&
+              !url.pathname.startsWith('/api/proxy') &&
+              !url.pathname.startsWith('/api/m3u'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
