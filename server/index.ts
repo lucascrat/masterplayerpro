@@ -153,11 +153,15 @@ app.use('/api/favorites', favoriteRoutes);
 // it back to the client over our HTTPS connection.
 // For HLS manifests (.m3u8) it rewrites internal URLs to also go through proxy.
 
-/** Rewrite every segment / sub-playlist URL in an HLS manifest through /api/proxy. */
-function rewriteManifest(text: string, finalUrl: string): string {
+/** Rewrite every segment / sub-playlist URL in an HLS manifest through /api/proxy.
+ *  When `viaRelay` the child requests are tagged `&relay=1` so segments (which
+ *  the provider also serves from datacenter-blocked CDN hosts) go through the
+ *  residential agent too. */
+function rewriteManifest(text: string, finalUrl: string, viaRelay = false): string {
   const finalParsed = new URL(finalUrl);
   const finalOrigin = finalParsed.origin;
   const finalDir    = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);
+  const tag = viaRelay ? '&relay=1' : '';
   return text.split('\n').map(line => {
     const trimmed = line.trim();
     if (!trimmed) return line;
@@ -165,14 +169,14 @@ function rewriteManifest(text: string, finalUrl: string): string {
       return line.replace(/URI=["']([^"']+)["']/g, (_m, p1) => {
         let abs = p1;
         if (!p1.startsWith('http')) abs = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
-        return `URI="/api/proxy?url=${encodeURIComponent(abs)}"`;
+        return `URI="/api/proxy?url=${encodeURIComponent(abs)}${tag}"`;
       });
     }
     let fullUrl: string;
     if (trimmed.startsWith('http')) fullUrl = trimmed;
     else if (trimmed.startsWith('/')) fullUrl = finalOrigin + trimmed;
     else fullUrl = finalDir + trimmed;
-    return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
+    return `/api/proxy?url=${encodeURIComponent(fullUrl)}${tag}`;
   }).join('\n');
 }
 
@@ -188,19 +192,32 @@ app.get('/api/proxy', async (req, res) => {
 
   // console.log(`[Proxy] Request: ${targetUrl}`);
 
-  // ── Relay fast-path: small `.m3u8` manifests for a proxy-scoped host go to
-  // the residential agent (dodges the datacenter 403) when one is connected.
-  if (isManifestUrl(targetUrl) && hostInScope(targetUrl) && hasRelayAgent()) {
+  // ── Relay path ────────────────────────────────────────────────────────────
+  // Route through the residential agent (dodges the datacenter 403) when it's
+  // connected AND either: this is a manifest for a scoped host, or the request
+  // was tagged &relay=1 by a manifest we already fetched via the relay (its
+  // segments live on CDN hosts that also block the datacenter).
+  const forceRelay = req.query['relay'] === '1';
+  const relayEligible = hasRelayAgent() &&
+    (forceRelay || (isManifestUrl(targetUrl) && hostInScope(targetUrl)));
+  if (relayEligible) {
     try {
       const r = await relayGet(targetUrl, {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       });
-      if (r.status >= 200 && r.status < 300 && r.body.length) {
-        const finalUrl = r.headers['x-final-url'] || targetUrl;
+      if (r.status >= 200 && r.status < 400 && r.body.length) {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.send(rewriteManifest(r.body.toString('utf-8'), finalUrl));
+        const ct = String(r.headers['content-type'] || '').toLowerCase();
+        const asManifest = isManifestUrl(targetUrl) || ct.includes('mpegurl');
+        if (asManifest) {
+          const finalUrl = r.headers['x-final-url'] || targetUrl;
+          res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+          res.send(rewriteManifest(r.body.toString('utf-8'), finalUrl, true));
+        } else {
+          res.setHeader('Content-Type', r.headers['content-type'] || 'video/mp2t');
+          res.send(r.body);
+        }
         return;
       }
       console.warn(`[Proxy] relay returned ${r.status} for ${targetUrl.split('?')[0]}, falling back`);

@@ -28,7 +28,9 @@ export interface RelayResponse {
 }
 
 const RELAY_PATH = '/api/relay/agent';
-const REQUEST_TIMEOUT_MS = 12_000;
+// Covers: agent fetches from CDN + uploads the body back to us. Segments are
+// a few MB and home upstream is the slow leg, so allow generous headroom.
+const REQUEST_TIMEOUT_MS = 20_000;
 
 let agent: WebSocket | null = null;
 let agentSince = 0;

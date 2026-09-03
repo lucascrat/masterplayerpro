@@ -18,8 +18,9 @@ const HUB = process.env.KRATOR_HUB || 'wss://krator.appbr.pro/api/relay/agent';
 const KEY = process.env.KRATOR_KEY || 'PASTE_RELAY_KEY_HERE';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-const FETCH_TIMEOUT_MS = 12_000;
-const MAX_BODY_BYTES = 2 * 1024 * 1024; // manifests are KB; cap hard at 2 MB
+const FETCH_TIMEOUT_MS = 15_000;
+// Manifests are KB; live .ts segments run a few MB. Cap well above a segment.
+const MAX_BODY_BYTES = 16 * 1024 * 1024;
 
 let backoff = 1000;
 
