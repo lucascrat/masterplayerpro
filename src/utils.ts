@@ -147,9 +147,11 @@ export function deduplicateChannels(items: M3UItem[]): M3UItem[] {
 
   for (const item of items) {
     const baseName = stripQuality(item.name);
-    // Use tvg-id when non-empty (groups same channel across qualities reliably),
-    // otherwise fall back to the stripped name.
-    const key = (item.tvgId && item.tvgId.trim()) ? item.tvgId.trim().toLowerCase() : baseName.toLowerCase();
+    // Key on the quality-stripped NAME only. tvg-id is NOT reliable here — the
+    // provider reuses one id across genuinely different feeds ("A Fazenda 1-6",
+    // "Amazon Prime 1-8", regional "Band SP/RJ/..."), so keying on it merged
+    // hundreds of distinct channels into one.
+    const key = baseName.toLowerCase().replace(/\s+/g, ' ').trim();
     const rank = qualityRank(item.name);
     const existing = best.get(key);
 
@@ -270,6 +272,32 @@ export function extractShowName(name: string): string {
     .replace(/\s*[-–—]?\s*S\d{1,2}\s*[xXeE]\d{1,2}.*/i, '')
     .replace(/\s*\d{1,2}[xX]\d{1,2}.*/i, '') // 1x01 format
     .trim();
+}
+
+// ── Series structure helpers ────────────────────────────────────────────────
+// This provider ships every series under one group ("(VOD BR) Séries") with no
+// genre metadata. The only signal in the title is a trailing "(LEG)" marking
+// subtitled content (mostly anime / doramas / foreign). So series are
+// structured by: dub/leg split + an A–Z index over the show title.
+
+/** Subtitled (legendada) show? — trailing "(LEG)" marker. */
+export function isLegendado(name: string): boolean {
+  return /\(\s*leg\s*\)/i.test(name);
+}
+
+/** Show title without the "(LEG)" marker, for display. */
+export function cleanShowTitle(name: string): string {
+  return name.replace(/\s*\(\s*leg\s*\)\s*/i, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
+export const SERIES_LETTERS = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
+
+/** A–Z bucket for a show title; digits/symbols → "#". */
+export function seriesLetter(name: string): string {
+  // NFD decomposition + drop non-ASCII (combining marks) folds Á→A, Ç→C, etc.
+  const folded = cleanShowTitle(name).trim().normalize('NFD').replace(/[^\x00-\x7F]/g, '');
+  const c = folded.charAt(0).toUpperCase();
+  return (c >= 'A' && c <= 'Z') ? c : '#';
 }
 
 // Returns {season, episode, label} from "S01 E03 - Title" or null if not an episode

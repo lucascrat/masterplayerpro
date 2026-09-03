@@ -2284,6 +2284,91 @@ h1, h2, h3, h4 {
 }
 
 /* ==========================================
+   SERIES BROWSER — A–Z + dub/leg + grid
+   ========================================== */
+.series-browser { padding: 0.75rem 4% 4rem; }
+
+.series-scope-pills {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.series-scope-pill {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s;
+  font-family: var(--font-main);
+}
+.series-scope-pill.active {
+  background: #e50914;
+  border-color: #e50914;
+  color: #fff;
+}
+
+.series-az-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.series-az {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.75);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s;
+  font-family: var(--font-main);
+}
+.series-az:hover:not(:disabled) { background: rgba(139,92,246,0.2); color: #fff; }
+.series-az.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.series-az:disabled { opacity: 0.25; cursor: default; }
+
+.series-count {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 0.75rem;
+}
+
+.series-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 16px 12px;
+}
+.series-grid .nf-card { width: 100%; }
+.series-grid .nf-card:hover { transform: scale(1.05); }
+
+.series-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: rgba(255,255,255,0.4);
+}
+
+@media (max-width: 768px) {
+  .series-browser { padding: 0.75rem 3% 4rem; }
+  .series-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px 8px; }
+  .series-az { min-width: 27px; height: 27px; font-size: 0.74rem; }
+}
+
+/* ==========================================
    LIVE TV – SUBCATEGORY PILLS & QUALITY
    ========================================== */
 

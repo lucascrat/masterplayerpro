@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { M3UItem } from '../../types';
-import { groupByCategory, groupSeriesByShow, sortCategories, MOVIE_CATEGORY_ORDER, SERIES_CATEGORY_ORDER } from '../../utils';
+import { groupByCategory, groupSeriesByShow, sortCategories, MOVIE_CATEGORY_ORDER, SERIES_CATEGORY_ORDER,
+         SERIES_LETTERS, seriesLetter, isLegendado, cleanShowTitle } from '../../utils';
 import MovieDetail from '../../components/MovieDetail';
 import SeriesDetail from '../../components/SeriesDetail';
 
@@ -227,6 +228,125 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
   );
 }
 
+// ── Series browser (vertical grid + A–Z + dub/leg) ──────────────────
+interface SeriesBrowserProps {
+  shows: M3UItem[];               // one virtual item per show
+  onCardClick: (item: M3UItem) => void;
+}
+
+function SeriesBrowser({ shows, onCardClick }: SeriesBrowserProps) {
+  const [scope, setScope] = useState<'all' | 'dub' | 'leg'>('all');
+  const [letter, setLetter] = useState<string>('all');
+  const [limit, setLimit] = useState(60);
+  const [posters, setPosters] = useState<Record<string, string>>({});
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // scope + letter filter, then sort A→Z by clean title
+  const filtered = useMemo(() => {
+    let list = shows;
+    if (scope === 'dub') list = list.filter(s => !isLegendado(s.name));
+    else if (scope === 'leg') list = list.filter(s => isLegendado(s.name));
+    if (letter !== 'all') list = list.filter(s => seriesLetter(s.name) === letter);
+    return [...list].sort((a, b) =>
+      cleanShowTitle(a.name).localeCompare(cleanShowTitle(b.name), 'pt-BR', { sensitivity: 'base' }));
+  }, [shows, scope, letter]);
+
+  // which A–Z buttons actually have content (for the current scope)
+  const activeLetters = useMemo(() => {
+    const set = new Set<string>();
+    const base = scope === 'all' ? shows
+      : shows.filter(s => scope === 'leg' ? isLegendado(s.name) : !isLegendado(s.name));
+    for (const s of base) set.add(seriesLetter(s.name));
+    return set;
+  }, [shows, scope]);
+
+  useEffect(() => { setLimit(60); }, [scope, letter]);
+
+  const visible = filtered.slice(0, limit);
+
+  // lazy poster fetch for the visible slice
+  useEffect(() => {
+    const missing = visible.filter(s => posters[s.name] === undefined).slice(0, 40);
+    if (!missing.length) return;
+    let cancelled = false;
+    fetchBatchPosters(missing).then(data => {
+      if (cancelled) return;
+      setPosters(prev => {
+        const next = { ...prev, ...data };
+        for (const s of missing) if (next[s.name] === undefined) next[s.name] = s.logo || '';
+        return next;
+      });
+    }).catch(() => {
+      if (cancelled) return;
+      setPosters(prev => {
+        const next = { ...prev };
+        for (const s of missing) if (next[s.name] === undefined) next[s.name] = s.logo || '';
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [visible, posters]);
+
+  // infinite scroll
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e?.isIntersecting) setLimit(l => Math.min(l + 60, filtered.length));
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length]);
+
+  const hasLeg = useMemo(() => shows.some(s => isLegendado(s.name)), [shows]);
+
+  return (
+    <div className="series-browser">
+      {hasLeg && (
+        <div className="series-scope-pills">
+          {(['all', 'dub', 'leg'] as const).map(s => (
+            <button
+              key={s}
+              className={`series-scope-pill${scope === s ? ' active' : ''}`}
+              onClick={() => setScope(s)}
+            >{s === 'all' ? 'Todas' : s === 'dub' ? 'Dubladas' : 'Legendadas'}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="series-az-bar">
+        <button
+          className={`series-az${letter === 'all' ? ' active' : ''}`}
+          onClick={() => setLetter('all')}
+        >Todas</button>
+        {SERIES_LETTERS.map(L => (
+          <button
+            key={L}
+            disabled={!activeLetters.has(L)}
+            className={`series-az${letter === L ? ' active' : ''}`}
+            onClick={() => setLetter(L)}
+          >{L}</button>
+        ))}
+      </div>
+
+      <div className="series-count">{filtered.length} séries</div>
+
+      <div className="series-grid">
+        {visible.map((item, idx) => (
+          <NfCard
+            key={`${item.name}-${idx}`}
+            item={{ ...item, name: cleanShowTitle(item.name) || item.name }}
+            poster={posters[item.name] !== undefined ? posters[item.name] : null}
+            onClick={() => onCardClick(item)}
+          />
+        ))}
+      </div>
+      <div ref={sentinelRef} style={{ height: 1 }} />
+      {!filtered.length && <div className="series-empty">Nada nesta letra.</div>}
+    </div>
+  );
+}
+
 // Category icons for the filter tab bar
 const CAT_ICONS_MOVIE: Record<string, string> = {
   'Filmes BR':  '🇧🇷',
@@ -393,25 +513,34 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, 
         />
       )}
 
-      {/* Rows */}
-      <div className="nf-rows">
-        {top10Items.length >= 3 && (
-          <ContentRow
-            rowTitle={isSeriesMode ? '🔥 Top 10 Séries' : '🔥 Top 10'}
-            items={top10Items}
-            isTop10
-            onCardClick={handleCardClick}
-          />
-        )}
-        {otherCategories.map(cat => (
-          <ContentRow
-            key={cat}
-            rowTitle={cat}
-            items={displayGroups[cat]}
-            onCardClick={handleCardClick}
-          />
-        ))}
-      </div>
+      {/* Series: vertical A–Z browser for the active category.
+          Movies: the classic Top-10 + per-category rows. */}
+      {isSeriesMode ? (
+        <SeriesBrowser
+          key={heroCategory}
+          shows={displayGroups[heroCategory] || []}
+          onCardClick={handleCardClick}
+        />
+      ) : (
+        <div className="nf-rows">
+          {top10Items.length >= 3 && (
+            <ContentRow
+              rowTitle="🔥 Top 10"
+              items={top10Items}
+              isTop10
+              onCardClick={handleCardClick}
+            />
+          )}
+          {otherCategories.map(cat => (
+            <ContentRow
+              key={cat}
+              rowTitle={cat}
+              items={displayGroups[cat]}
+              onCardClick={handleCardClick}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Movie detail modal */}
       {selectedItem && (
