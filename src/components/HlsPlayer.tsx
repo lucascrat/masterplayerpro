@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { getResumePosition, saveProgress } from '../lib/watchProgress';
+import { toast } from './Toast';
+
+function fmtTime(sec: number): string {
+  const s = Math.floor(sec % 60);
+  const m = Math.floor((sec / 60) % 60);
+  const h = Math.floor(sec / 3600);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
 
 interface HlsPlayerProps {
   url: string;
@@ -113,8 +123,37 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
 
-    const onPlaying = () => { clearTO(); setLoading(false); };
-    const onCanPlay = () => { clearTO(); setLoading(false); };
+    // ── Resume where the user left off (VOD only; live streams have no
+    //    finite duration so saveProgress simply ignores them) ──────────
+    const resumeAt = getResumePosition(url);
+    let resumeApplied = false;
+    const maybeResume = () => {
+      if (resumeApplied || resumeAt == null) return;
+      if (!isFinite(video.duration) || video.duration <= 0) return; // live
+      if (resumeAt >= video.duration - 5) { resumeApplied = true; return; }
+      resumeApplied = true;
+      try {
+        video.currentTime = resumeAt;
+        toast(`Retomando de ${fmtTime(resumeAt)}`, 'info', 3000);
+      } catch { /* seek not ready yet — retry on next event */ resumeApplied = false; }
+    };
+
+    let lastSave = 0;
+    const persist = () => {
+      if (video.currentTime < 5) return; // don't clobber a saved point on retry/instant close
+      if (!isFinite(video.duration) || video.duration <= 0) return;
+      saveProgress(url, video.currentTime, video.duration);
+    };
+    const onTimeUpdate = () => {
+      const now = Date.now();
+      if (now - lastSave < 10000) return;
+      lastSave = now;
+      persist();
+    };
+
+    const onPlaying = () => { clearTO(); setLoading(false); maybeResume(); };
+    const onCanPlay = () => { clearTO(); setLoading(false); maybeResume(); };
+    const onLoadedMeta = () => maybeResume();
     const onWaiting = () => setLoading(true);
     const onError   = () => {
       clearTO();
@@ -125,6 +164,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('loadedmetadata', onLoadedMeta);
+    video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('error',   onError);
 
@@ -198,8 +239,11 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
 
     return () => {
       clearTO();
+      persist(); // remember position on close / source change
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('loadedmetadata', onLoadedMeta);
+      video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('error',   onError);
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
