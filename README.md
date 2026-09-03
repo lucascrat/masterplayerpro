@@ -1,73 +1,58 @@
-# React + TypeScript + Vite
+# Krator+ (masterplayerpro)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+IPTV player PWA — live TV, movies and series — with a React client and a
+bundled Express API. Fully self-hosted: the client talks only to its own
+`/api`, backed by PostgreSQL via Prisma.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Client**: React 19 + Vite 6, `vite-plugin-pwa` (offline shell, autoupdate SW)
+- **Server**: Express 5 (`tsx` at runtime) — serves the built client and provides:
+  - `/api/auth/*` — user login, reward-code login, heartbeat, logout
+  - `/api/favorites/*` — per-user / per-device favourites
+  - `/api/admin/*` — playlists, IPTV credential pool, app users, devices
+    (static key in the `Authorization` header, `ADMIN_KEY` env)
+  - `/api/proxy` — HTTP→HTTPS stream proxy (mixed-content fix, m3u8 rewrite)
+  - `/api/m3u` — raw server-side playlist fetch (no CORS, no 3rd-party proxy)
+  - `/api/tmdb/*` — poster/metadata lookup (needs `TMDB_TOKEN`, optional)
+- **DB**: PostgreSQL, schema in `prisma/schema.prisma`
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.example .env      # set DATABASE_URL at least
+npx prisma db push        # create the schema
+npm run dev:all           # vite (5173) + api (3001)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`npm run dev` runs only the client; `npm run server` only the API.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Deploy (Docker / Coolify)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+The `Dockerfile` builds the client and Prisma client, then
+`docker-entrypoint.sh` runs `prisma db push` (retrying until the DB is up)
+and starts the server on `PORT` (default `3001`).
+
+Required environment variables — see [`.env.example`](.env.example):
+
+| var            | notes                                               |
+| -------------- | --------------------------------------------------- |
+| `DATABASE_URL` | PostgreSQL connection string (use the internal URL) |
+| `PORT`         | server port (Coolify maps it)                       |
+| `ADMIN_KEY`    | key for every `/api/admin/*` request — set a long random value |
+| `TMDB_TOKEN`   | optional, TMDB v4 read token for posters            |
+
+### First run
+
+The database starts empty. Open `/admin`, sign in with `ADMIN_KEY`
+(the username field is cosmetic), then:
+
+1. **Playlists** → add your M3U/Xtream URL. Credentials in the URL are
+   extracted automatically.
+2. **Usuários → Credenciais IPTV** → add the shared IPTV account(s) and
+   point them at the playlist (or a DNS).
+3. **Usuários → Usuários do App** → create the accounts people log in with.
+
+Client login then leases a credential from the pool and returns the
+parsed, per-user playlist.
