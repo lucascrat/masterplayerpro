@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { M3UItem } from '../../types';
-import { groupByCategory, groupSeriesByShow } from '../../utils';
+import { groupByCategory, groupSeriesByShow, sortCategories, MOVIE_CATEGORY_ORDER, SERIES_CATEGORY_ORDER } from '../../utils';
 import MovieDetail from '../../components/MovieDetail';
 import SeriesDetail from '../../components/SeriesDetail';
 
@@ -227,17 +227,37 @@ function ContentRow({ rowTitle, items, isTop10 = false, onCardClick }: RowProps)
   );
 }
 
+// Category icons for the filter tab bar
+const CAT_ICONS_MOVIE: Record<string, string> = {
+  'Filmes BR':  '🇧🇷',
+  'Legendados': '📋',
+  'Espanhol':   '🇪🇸',
+  'Novelas':    '📖',
+  'Cinema CAM': '🎥',
+  'LGBT':       '🏳️‍🌈',
+  'Adulto':     '🔞',
+};
+const CAT_ICONS_SERIES: Record<string, string> = {
+  'Séries BR':  '🇧🇷',
+  'Espanhol':   '🇪🇸',
+  'Adulto':     '🔞',
+};
+
 // ── Main Page ───────────────────────────────────────────────────────
 export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, favorites = [], onToggleFavorite }: MovieGridPageProps) {
   const [selectedItem, setSelectedItem] = useState<M3UItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<{ name: string; episodes: M3UItem[] } | null>(null);
+  const [catFilter, setCatFilter] = useState<string>('all');
+  const [showAdult, setShowAdult] = useState(false);
 
   const isSeriesMode = title === 'Séries' || title === 'Series' || items.some(i => /S\d{1,2}\s*[xXeE]\d{1,2}/i.test(i.name));
+  const catOrder = isSeriesMode ? SERIES_CATEGORY_ORDER : MOVIE_CATEGORY_ORDER;
+  const catIcons = isSeriesMode ? CAT_ICONS_SERIES : CAT_ICONS_MOVIE;
 
   // Build display groups:
   // - Movies: group by category → M3UItem[]
   // - Series: group by category → group by show → one virtual M3UItem per show
-  const { displayGroups, showEpisodesMap } = useMemo(() => {
+  const { displayGroups, showEpisodesMap, allCategories } = useMemo(() => {
     const episodesMap: Record<string, M3UItem[]> = {};
     const catGroups = groupByCategory(items);
     const dGroups: Record<string, M3UItem[]> = {};
@@ -247,7 +267,6 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, 
         const byShow = groupSeriesByShow(catItems);
         dGroups[cat] = Object.entries(byShow).map(([showName, eps]) => {
           episodesMap[showName] = eps;
-          // Virtual item representing the show
           return {
             name: showName,
             logo: eps[0]?.logo || '',
@@ -261,15 +280,20 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, 
       Object.assign(dGroups, catGroups);
     }
 
-    return { displayGroups: dGroups, showEpisodesMap: episodesMap };
-  }, [items, isSeriesMode]);
+    const sorted = sortCategories(Object.keys(dGroups), catOrder);
+    return { displayGroups: dGroups, showEpisodesMap: episodesMap, allCategories: sorted };
+  }, [items, isSeriesMode, catOrder]);
 
-  const categories = Object.keys(displayGroups);
+  // Tabs: hide "Adulto" unless user toggled it
+  const hasAdult = allCategories.includes('Adulto');
+  const visibleTabs = showAdult ? allCategories : allCategories.filter(c => c !== 'Adulto');
 
-  // Hero: for series prefer "novidades/lançamento/destaque", for movies prefer "lançamentos"
-  const heroCategory = isSeriesMode
-    ? (categories.find(c => /novidade|destaque|novo|recente|lança/i.test(c)) || categories[0] || '')
-    : (categories.find(c => /lança/i.test(c)) || categories.find(c => /cinema|destaque|novo/i.test(c)) || categories[0] || '');
+  // Apply category filter — if selected cat no longer exists, fall back to 'all'
+  const activeFilter = allCategories.includes(catFilter) ? catFilter : 'all';
+  const categories = activeFilter === 'all' ? visibleTabs : [activeFilter];
+
+  // Hero: first item of first (non-adult) category
+  const heroCategory = categories.filter(c => c !== 'Adulto')[0] || categories[0] || '';
 
   const heroItem = displayGroups[heroCategory]?.[0] || items[0];
   const top10Items = displayGroups[heroCategory] || [];
@@ -327,10 +351,38 @@ export default function MovieGridPage({ title, items, onBack, onPlay, onSearch, 
           {totalCount} {isSeriesMode ? 'séries' : 'títulos'}
           {isSeriesMode && ` · ${items.length} ep`}
         </span>
+        {hasAdult && (
+          <button
+            className={`adult-toggle-btn${showAdult ? ' active' : ''}`}
+            onClick={() => { setShowAdult(v => !v); if (catFilter === 'Adulto') setCatFilter('all'); }}
+            title={showAdult ? 'Ocultar adulto' : 'Mostrar adulto'}
+            aria-pressed={showAdult}
+          >🔞</button>
+        )}
         {onSearch && (
           <button className="topbar-search-btn" onClick={onSearch} title="Buscar (/)">🔍</button>
         )}
       </div>
+
+      {/* Category filter tab bar */}
+      {visibleTabs.length > 1 && (
+        <div className="nf-category-tabs">
+          <button
+            className={`nf-cat-tab${activeFilter === 'all' ? ' active' : ''}`}
+            onClick={() => setCatFilter('all')}
+          >Todos</button>
+          {visibleTabs.map(cat => (
+            <button
+              key={cat}
+              className={`nf-cat-tab${activeFilter === cat ? ' active' : ''}${cat === 'Adulto' ? ' adult-tab' : ''}`}
+              onClick={() => setCatFilter(activeFilter === cat ? 'all' : cat)}
+            >
+              {catIcons[cat] && <span className="nf-cat-tab-icon">{catIcons[cat]}</span>}
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Hero */}
       {heroItem && (

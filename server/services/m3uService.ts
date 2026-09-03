@@ -1,4 +1,4 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 import prisma from '../db';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -18,20 +18,95 @@ interface PlaylistData {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function normalize(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/**
+ * Map raw M3U group-title strings to clean, human-readable display names.
+ * Unknown groups fall back to a generic prefix-stripping rule.
+ */
+const GROUP_NAME_MAP: Record<string, string> = {
+  // VOD - Movies
+  '(vod br) filmes':                    'Filmes BR',
+  '(vod mult leg) filmes':              'Legendados',
+  '(vod br) cinema cam':                'Cinema CAM',
+  '(vod es) peliculas y series es':     'Espanhol',
+  '(vod) novelas br':                   'Novelas',
+  '(vod) lgbt':                         'LGBT',
+  '(vod) xxx +18':                      'Adulto',
+  // VOD - Series
+  '(vod br) séries':                    'Séries BR',
+  '(vod br) series':                    'Séries BR',
+  // Live - Brazil
+  'canais | brasil':                    'Brasil',
+  'canais br 4k':                       'Brasil 4K',
+  'canais | brasil 24h':                'Brasil 24h',
+  'canais | nba league pass':           'NBA',
+  'canais | portugal (pt)':             'Portugal',
+  'canais | xxx +18':                   'Adulto',
+  // Live - Spanish
+  'canales | deportes':                 'Esportes',
+  'canales | deportes ppv':             'Esportes PPV',
+  'canales | nba':                      'NBA ES',
+  'canales | documentales':             'Documentários',
+  'canales | infantiles':               'Infantil',
+  'canales | variedades':               'Variedades',
+  'canales | notícias':                 'Notícias',
+  'canales | noticias':                 'Notícias',
+  'canales | peliculas y series':       'Filmes ES',
+  'canales | 24h':                      '24h ES',
+  'canales | entretenimento y novelas': 'Entretenimento',
+  // Live - International
+  'canal | france':                     'França',
+  'channels | usa':                     'USA',
+  // Live - Local TV
+  'tv local (ar)':                      'Argentina',
+  'tv local (bo)':                      'Bolívia',
+  'tv local (cl)':                      'Chile',
+  'tv local (co)':                      'Colômbia',
+  'tv local (cu)':                      'Cuba',
+  'tv local (es)':                      'Espanha',
+  'tv local (mex)':                     'México',
+  'tv local (pe)':                      'Peru',
+  'tv local (py)':                      'Paraguai',
+  'tv local (rd)':                      'R. Dominicana',
+  'tv local (uy)':                      'Uruguai',
+  'tv local (ve)':                      'Venezuela',
+  // Misc
+  'rádio br':                           'Rádio',
+  'radio br':                           'Rádio',
+  'câmeras | play store':               'Câmeras',
+  'cameras | play store':               'Câmeras',
+  'variados':                           'Variados',
+};
+
+export function normalizeGroupName(raw: string): string {
+  if (!raw) return raw;
+  const mapped = GROUP_NAME_MAP[raw.toLowerCase().trim()];
+  if (mapped) return mapped;
+  // Generic prefix stripping for unknown groups
+  return raw
+    .replace(/^\(VOD\s+[^)]+\)\s*/i, '')
+    .replace(/^Canai[s]?\s*[|]\s*/i, '')
+    .replace(/^Canale[s]?\s*[|]\s*/i, '')
+    .replace(/^Channel[s]?\s*[|]\s*/i, '')
+    .replace(/^Canal\s*[|]\s*/i, '')
+    .trim() || raw;
 }
 
 function classifyByGroup(group: string): 'live' | 'movie' | 'series' | null {
   const g = normalize(group);
 
+  // 'novela' removed from series — novela URLs contain /movie/ so
+  // URL-based detection correctly classifies them before this fallback runs.
   if (
     g.includes('serie') || g.includes('season') || g.includes('episod') ||
-    g.includes('novela') || g.includes('anime') || g.includes('dorama')
+    g.includes('anime') || g.includes('dorama')
   ) return 'series';
 
   if (
     g.includes('filme') || g.includes('movie') || g.includes('cinema') ||
-    g.includes('vod') || g.includes('lancamento') ||
+    g.includes('vod') || g.includes('lancamento') || g.includes('novela') ||
     g.includes('documentario') || g.includes('documentary')
   ) return 'movie';
 
@@ -110,9 +185,12 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
           const logoMatch = line.match(/tvg-logo="([^"]*)"/);
           currentItem.logo = logoMatch ? logoMatch[1] : '';
           const groupMatch = line.match(/group-title="([^"]*)"/);
-          currentItem.group = groupMatch ? groupMatch[1] : 'Default';
+          // Normalize immediately so the rest of the app sees clean names
+          currentItem.group = normalizeGroupName(groupMatch ? groupMatch[1] : 'Default');
         } else if (line.startsWith('http')) {
           currentItem.url = line;
+          // Classify using the RAW group-title (before normalization) for best accuracy,
+          // but URL-based detection runs first anyway so this only matters as fallback.
           const type = classifyItem(currentItem.name || '', currentItem.group || '', line);
           currentItem.type = type;
           if (type === 'series') series.push(currentItem as M3UItem);

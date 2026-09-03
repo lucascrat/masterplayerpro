@@ -1,5 +1,107 @@
 import type { M3UItem } from './types';
 
+// ── Group normalization ───────────────────────────────────────────────────────
+// Mirrors the server-side normalizeGroupName so client-parsed playlists also
+// display clean category names.
+const GROUP_NAME_MAP: Record<string, string> = {
+  '(vod br) filmes':                    'Filmes BR',
+  '(vod mult leg) filmes':              'Legendados',
+  '(vod br) cinema cam':                'Cinema CAM',
+  '(vod es) peliculas y series es':     'Espanhol',
+  '(vod) novelas br':                   'Novelas',
+  '(vod) lgbt':                         'LGBT',
+  '(vod) xxx +18':                      'Adulto',
+  '(vod br) séries':                    'Séries BR',
+  '(vod br) series':                    'Séries BR',
+  'canais | brasil':                    'Brasil',
+  'canais br 4k':                       'Brasil 4K',
+  'canais | brasil 24h':                'Brasil 24h',
+  'canais | nba league pass':           'NBA',
+  'canais | portugal (pt)':             'Portugal',
+  'canais | xxx +18':                   'Adulto',
+  'canales | deportes':                 'Esportes',
+  'canales | deportes ppv':             'Esportes PPV',
+  'canales | nba':                      'NBA ES',
+  'canales | documentales':             'Documentários',
+  'canales | infantiles':               'Infantil',
+  'canales | variedades':               'Variedades',
+  'canales | notícias':                 'Notícias',
+  'canales | noticias':                 'Notícias',
+  'canales | peliculas y series':       'Filmes ES',
+  'canales | 24h':                      '24h ES',
+  'canales | entretenimento y novelas': 'Entretenimento',
+  'canal | france':                     'França',
+  'channels | usa':                     'USA',
+  'tv local (ar)':                      'Argentina',
+  'tv local (bo)':                      'Bolívia',
+  'tv local (cl)':                      'Chile',
+  'tv local (co)':                      'Colômbia',
+  'tv local (cu)':                      'Cuba',
+  'tv local (es)':                      'Espanha',
+  'tv local (mex)':                     'México',
+  'tv local (pe)':                      'Peru',
+  'tv local (py)':                      'Paraguai',
+  'tv local (rd)':                      'R. Dominicana',
+  'tv local (uy)':                      'Uruguai',
+  'tv local (ve)':                      'Venezuela',
+  'rádio br':                           'Rádio',
+  'radio br':                           'Rádio',
+  'câmeras | play store':               'Câmeras',
+  'cameras | play store':               'Câmeras',
+  'variados':                           'Variados',
+};
+
+export function normalizeGroupName(raw: string): string {
+  if (!raw) return raw;
+  const mapped = GROUP_NAME_MAP[raw.toLowerCase().trim()];
+  if (mapped) return mapped;
+  return raw
+    .replace(/^\(VOD\s+[^)]+\)\s*/i, '')
+    .replace(/^Canai[s]?\s*[|]\s*/i, '')
+    .replace(/^Canale[s]?\s*[|]\s*/i, '')
+    .replace(/^Channel[s]?\s*[|]\s*/i, '')
+    .replace(/^Canal\s*[|]\s*/i, '')
+    .trim() || raw;
+}
+
+// ── Category sort orders ──────────────────────────────────────────────────────
+export const LIVE_CATEGORY_ORDER = [
+  'Brasil', 'Brasil 4K', 'Brasil 24h',
+  'Portugal', 'USA', 'França',
+  'NBA', 'Esportes', 'Esportes PPV',
+  'Documentários', 'Infantil', 'Notícias', 'Variedades', 'Entretenimento',
+  'Filmes ES', '24h ES', 'NBA ES',
+  'Argentina', 'Chile', 'Colômbia', 'Venezuela', 'México', 'Peru',
+  'Paraguai', 'Uruguai', 'R. Dominicana', 'Bolívia', 'Cuba', 'Espanha',
+  'Rádio', 'Câmeras', 'Variados',
+  'Adulto',   // always last
+];
+
+export const MOVIE_CATEGORY_ORDER = [
+  'Filmes BR', 'Legendados', 'Espanhol', 'Novelas', 'Cinema CAM', 'LGBT',
+  'Adulto',   // always last
+];
+
+export const SERIES_CATEGORY_ORDER = [
+  'Séries BR', 'Espanhol',
+  'Adulto',
+];
+
+/**
+ * Sort category names according to a priority list.
+ * Categories not in the list sort alphabetically after the listed ones.
+ */
+export function sortCategories(cats: string[], order: string[]): string[] {
+  return [...cats].sort((a, b) => {
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.localeCompare(b, 'pt-BR');
+  });
+}
+
 export function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
   const groups: Record<string, M3UItem[]> = {};
   items.forEach(item => {
