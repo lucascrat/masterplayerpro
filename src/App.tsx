@@ -1,9 +1,9 @@
-// Build Trigger: Cloudflare Pages Deployment - v1.1.2-stable
-import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { supabase } from './lib/supabase';
+import { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import * as api from './lib/api';
+import { ApiError } from './lib/api';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
-import { generateMAC, parseM3UFromUrl } from './utils';
+import { generateMAC } from './utils';
 
 // Pages — login lands eagerly; the rest are split per route.
 import LoginScreen from './pages/client/LoginScreen';
@@ -22,6 +22,17 @@ const HlsPlayer = lazy(() => import('./components/HlsPlayer'));
 
 const AUTH_KEY = 'masterplayer_auth';
 
+interface StoredAuth {
+  username: string;
+  password: string;
+  playlistName: string;
+  userId?: string;
+  sessionId?: string;
+  rewardCode?: string;
+  accessUntil?: string;
+  coins?: number;
+}
+
 export default function App() {
   const clock = useClock();
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -34,292 +45,160 @@ export default function App() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
 
   const deviceId = generateMAC();
+  const sessionRef = useRef<AuthSession | null>(null);
+  sessionRef.current = session;
 
-  // Busca e parseia o arquivo M3U da URL fornecida
-  const loadPlaylist = useCallback(async (url: string) => {
-    console.log('--- INICIANDO CARREGAMENTO DE PLAYLIST ---');
-    console.log('URL Base:', url.split('?')[0]);
-    setPlaylistLoading(true);
-    try {
-      const items = await parseM3UFromUrl(url);
-      console.log(`Sucesso: ${items.length} itens encontrados.`);
-      
-      if (items.length === 0) {
-        console.warn('Aviso: Nenhum item extraído da lista.');
-        throw new Error('O arquivo M3U foi lido mas não contém nenhum canal ou filme. Verifique se as credenciais da lista estão corretas.');
-      }
+  const persist = (auth: AuthSession) => {
+    const toStore: StoredAuth = {
+      username: auth.username,
+      password: auth.password,
+      playlistName: auth.playlistName,
+      userId: auth.userId,
+      sessionId: auth.sessionId,
+      rewardCode: auth.rewardCode,
+      accessUntil: auth.accessUntil,
+      coins: auth.coins,
+    };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(toStore));
+  };
 
-      const live = items.filter(i => i.type === 'live');
-      const movies = items.filter(i => i.type === 'movie');
-      const series = items.filter(i => i.type === 'series');
+  const applyLoginResult = (res: api.LoginResult, base: { username: string; password: string }) => {
+    const auth: AuthSession = {
+      username: base.username,
+      password: base.password,
+      playlistName: res.playlistName || 'Krator+',
+      userId: res.userId,
+      sessionId: res.sessionId,
+      rewardCode: res.code,
+      accessUntil: res.accessUntil,
+      coins: res.coins,
+    };
+    setSession(auth);
+    persist(auth);
+    setPlaylist(res.playlist);
+  };
 
-      console.log('Resumo da Categorização:');
-      console.log(`- Canais: ${live.length}`);
-      console.log(`- Filmes: ${movies.length}`);
-      console.log(`- Séries: ${series.length}`);
-
-      if (live.length === 0 && movies.length === 0 && series.length === 0) {
-        console.warn('Aviso: Todos os itens foram filtrados (nenhum tipo correspondente).');
-        throw new Error('A lista foi lida mas nenhum item pôde ser categorizado como TV, Filme ou Série.');
-      }
-
-      setPlaylist({ live, movies, series });
-      console.log('--- PLAYLIST DEFINIDA NO ESTADO COM SUCESSO ---');
-    } catch (err: any) {
-      console.error('ERRO NO CARREGAMENTO:', err);
-      toast(err.message || 'Erro desconhecido ao processar a lista M3U.', 'error', 7000);
-    } finally {
-      setPlaylistLoading(false);
-    }
-  }, []);
-
+  // ── Password login ────────────────────────────────────────────────
   const doLogin = async (username: string, password: string, existingSessionId?: string): Promise<boolean> => {
     setLoginLoading(true);
+    setPlaylistLoading(true);
     try {
-      const userLower = username.trim().toLowerCase();
-
-      // 1. Validar Usuário
-      const { data: appUser, error: uError } = await supabase
-        .from('app_users')
-        .select('id, username, is_active')
-        .eq('username', userLower)
-        .eq('password', password)
-        .single();
-
-      if (uError || !appUser) {
-        setLoginError('Usuário ou senha incorretos');
-        return false;
-      }
-      if (!appUser.is_active) {
-        setLoginError('Conta desativada. Contate o administrador.');
-        return false;
-      }
-
-      // 2. Reutilizar sessão existente (restauração de sessão)
-      let sessionId = existingSessionId;
-      let credential: any = null;
-      let playlistUrl = '';
-      let playlistName = '';
-
-      if (sessionId) {
-        const { data: existingLease } = await supabase
-          .from('credential_leases')
-          .select('session_id, iptv_credentials(*, playlists(*))')
-          .eq('session_id', sessionId)
-          .single();
-
-        if (existingLease?.iptv_credentials) {
-          credential = existingLease.iptv_credentials;
-          
-          const playlistObj = Array.isArray((credential as any).playlists)
-            ? (credential as any).playlists[0]
-            : (credential as any).playlists;
-
-          playlistUrl = playlistObj?.url || '';
-          playlistName = playlistObj?.name || '';
-          console.log('Sessão restaurada. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
-        } else {
-          sessionId = undefined; // Sessão expirou, criar nova
-        }
-      }
-
-      if (!sessionId) {
-        // 3. Limpar leases expirados (ociosos há mais de 10 min)
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        await supabase
-          .from('credential_leases')
-          .delete()
-          .lt('last_activity', tenMinutesAgo)
-          .eq('is_watching', false);
-
-        // 4. Buscar credencial disponível do pool global
-        const { data: creds, error: cError } = await supabase
-          .from('iptv_credentials')
-          .select('*, playlists(*), credential_leases(id)')
-          .eq('is_active', true);
-
-        if (cError) throw cError;
-
-        const availableCred = (creds as any[])?.find(
-          c => (c.credential_leases?.length || 0) < (c.max_leases || 2)
-        );
-
-        if (!availableCred) {
-          setLoginError('Serviço lotado no momento. Tente novamente em alguns minutos.');
-          return false;
-        }
-
-        // 5. Criar Lease (reservar credencial para este usuário)
-        const { data: newLease, error: lError } = await supabase
-          .from('credential_leases')
-          .insert([{
-            app_user_id: appUser.id,
-            credential_id: availableCred.id,
-            is_watching: false
-          }])
-          .select('session_id')
-          .single();
-
-        if (lError || !newLease) throw new Error('Erro ao reservar credencial');
-
-        sessionId = (newLease as any).session_id;
-        credential = availableCred;
-        
-        // Suporte robusto para relação Supabase (pode vir como objeto ou array de 1 item)
-        const playlistObj = Array.isArray((availableCred as any).playlists) 
-          ? (availableCred as any).playlists[0] 
-          : (availableCred as any).playlists;
-
-        playlistUrl = playlistObj?.url || '';
-        playlistName = playlistObj?.name || '';
-        
-        console.log('Nova sessão. Playlist:', playlistName, 'URL:', playlistUrl ? 'OK' : 'Vazia');
-
-        if (!playlistUrl) {
-          throw new Error('A credencial selecionada não possui uma playlist vinculada.');
-        }
-      }
-
-      // 6. Montar sessão e injetar credenciais na URL
-      const auth: AuthSession = {
-        username: appUser.username,
-        password,
-        playlistName,
-        userId: appUser.id,
-        sessionId
-      };
-
-      // Construção robusta da URL com URL API
-      let finalUrl = playlistUrl;
-      try {
-        const urlObj = new URL(playlistUrl);
-        
-        // Remove parâmetros antigos se existirem (para evitar duplicatas)
-        urlObj.searchParams.delete('username');
-        urlObj.searchParams.delete('user');
-        urlObj.searchParams.delete('password');
-        urlObj.searchParams.delete('pass');
-
-        // Adiciona as credenciais da conta IPTV
-        urlObj.searchParams.set('username', credential.username);
-        urlObj.searchParams.set('password', credential.password);
-        
-        finalUrl = urlObj.toString();
-      } catch (e) {
-        // Fallback para replace simples se a URL for inválida para o construtor
-        finalUrl = playlistUrl
-          .replace(/(username|user)=[^&]*/i, `$1=${credential.username}`)
-          .replace(/(password|pass)=[^&]*/i, `$1=${credential.password}`);
-      }
-
-      setSession(auth);
-      // Salvar URL para poder recarregar depois
-      localStorage.setItem(AUTH_KEY, JSON.stringify({ ...auth, _playlistUrl: finalUrl }));
+      const res = await api.login(username.trim().toLowerCase(), password, existingSessionId);
+      applyLoginResult(res, { username: username.trim().toLowerCase(), password });
       setLoginError(null);
       setCurrentPage('home');
-
-      // Carregar conteúdo da playlist em background
-      loadPlaylist(finalUrl);
       return true;
-
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setLoginError('Erro ao processar login. Tente novamente.');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Erro ao processar login. Tente novamente.';
+      setLoginError(msg);
       return false;
     } finally {
       setLoginLoading(false);
+      setPlaylistLoading(false);
     }
   };
 
-
-  const doCodeLogin = async (_code: string): Promise<boolean> => {
-    // Sistema de recompensas/código será migrado para Supabase em breve
-    setLoginError('Sistema de códigos em manutenção.');
-    return false;
+  // ── Reward-code login ─────────────────────────────────────────────
+  const doCodeLogin = async (code: string, existingSessionId?: string): Promise<boolean> => {
+    setLoginLoading(true);
+    setPlaylistLoading(true);
+    try {
+      const res = await api.redeemCode(code.trim().toUpperCase(), existingSessionId);
+      applyLoginResult(res, { username: res.code || code, password: '' });
+      setLoginError(null);
+      setCurrentPage('home');
+      return true;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Não foi possível validar o código.';
+      setLoginError(msg);
+      return false;
+    } finally {
+      setLoginLoading(false);
+      setPlaylistLoading(false);
+    }
   };
 
-  const logout = async () => {
-    if (session?.sessionId) {
-      // Remover o lease ao deslogar
-      await supabase.from('credential_leases').delete().eq('session_id', session.sessionId);
-    }
+  const logout = useCallback(async () => {
+    const sid = sessionRef.current?.sessionId;
+    if (sid) api.logout(sid);
     localStorage.removeItem(AUTH_KEY);
     setSession(null);
     setPlaylist(null);
     setCurrentPage('login');
-  };
-
-  // On mount: try to restore session from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(AUTH_KEY);
-    if (saved) {
-      try {
-        const stored = JSON.parse(saved);
-        const { _playlistUrl, ...auth } = stored;
-
-        // Vai para Home imediatamente, sem tela de loading
-        setSession(auth as AuthSession);
-        setCurrentPage('home');
-
-        // Recarregar playlist salva em paralelo
-        if (_playlistUrl) {
-          loadPlaylist(_playlistUrl);
-        }
-
-        // Re-validar sessão em background (sem bloquear a UI)
-        doLogin(auth.username, auth.password, auth.sessionId).then(ok => {
-          if (!ok) logout();
-        });
-
-      } catch (e) {
-        localStorage.removeItem(AUTH_KEY);
-        setCurrentPage('login');
-      }
-    } else {
-      setCurrentPage('login');
-    }
   }, []);
 
-  const fetchFavorites = useCallback(async () => {
-    if (!session && currentPage === 'login') return;
-    try {
-      const query = supabase.from('user_favorites').select('*');
-      if (session?.userId) query.eq('app_user_id', session.userId);
-      else query.eq('device_id', deviceId);
+  // On mount: restore session from localStorage, then re-validate in the background
+  useEffect(() => {
+    const saved = localStorage.getItem(AUTH_KEY);
+    if (!saved) { setCurrentPage('login'); return; }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setFavorites(data || []);
-    } catch (err) {
+    let auth: StoredAuth;
+    try {
+      auth = JSON.parse(saved) as StoredAuth;
+    } catch {
+      localStorage.removeItem(AUTH_KEY);
+      setCurrentPage('login');
+      return;
+    }
+
+    setSession({
+      username: auth.username,
+      password: auth.password,
+      playlistName: auth.playlistName,
+      userId: auth.userId,
+      sessionId: auth.sessionId,
+      rewardCode: auth.rewardCode,
+      accessUntil: auth.accessUntil,
+      coins: auth.coins,
+    });
+    setCurrentPage('home');
+    setPlaylistLoading(true);
+
+    const revalidate = auth.rewardCode
+      ? doCodeLogin(auth.rewardCode, auth.sessionId)
+      : doLogin(auth.username, auth.password, auth.sessionId);
+
+    revalidate.then(ok => { if (!ok) logout(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Favorites ─────────────────────────────────────────────────────
+  const fetchFavorites = useCallback(async () => {
+    if (!session) return;
+    try {
+      const rows = await api.getFavorites(
+        session.userId ? { appUserId: session.userId } : { deviceId }
+      );
+      setFavorites(rows.map(r => ({
+        id: r.id,
+        itemName: r.itemName,
+        itemType: r.itemType,
+        itemGroup: r.itemGroup ?? undefined,
+        itemLogo: r.itemLogo ?? undefined,
+        itemUrl: r.itemUrl,
+      })));
+    } catch {
       console.error('Failed to fetch favorites');
     }
-  }, [session, deviceId, currentPage]);
+  }, [session, deviceId]);
 
   useEffect(() => {
-    if (currentPage !== 'loading' && currentPage !== 'login') {
-      fetchFavorites();
-    }
+    if (currentPage !== 'loading' && currentPage !== 'login') fetchFavorites();
   }, [currentPage, fetchFavorites]);
 
   const toggleFavorite = async (item: M3UItem) => {
     try {
-      const isFav = favorites.find(f => f.itemName === item.name);
-      
-      if (isFav) {
-        await supabase.from('user_favorites').delete().eq('id', isFav.id);
-      } else {
-        await supabase.from('user_favorites').insert([{
-          app_user_id: session?.userId || null,
-          device_id: session?.userId ? null : deviceId,
-          itemName: item.name,
-          itemType: item.type,
-          itemGroup: item.group,
-          itemLogo: item.logo,
-          itemUrl: item.url
-        }]);
-      }
+      await api.toggleFavorite({
+        appUserId: session?.userId || null,
+        deviceId: session?.userId ? null : deviceId,
+        itemName: item.name,
+        itemType: item.type,
+        itemGroup: item.group,
+        itemLogo: item.logo,
+        itemUrl: item.url,
+      });
       fetchFavorites();
-    } catch (err) {
+    } catch {
       toast('Não foi possível atualizar os favoritos.', 'error');
     }
   };
@@ -328,92 +207,61 @@ export default function App() {
   useEffect(() => {
     if (!session?.accessUntil) return;
     const remaining = new Date(session.accessUntil).getTime() - Date.now();
-    if (remaining <= 0) {
-      logout();
-      return;
-    }
+    if (remaining <= 0) { logout(); return; }
     const timer = setTimeout(() => logout(), remaining + 500);
     return () => clearTimeout(timer);
-  }, [session?.accessUntil]);
+  }, [session?.accessUntil, logout]);
 
-  // Heartbeat: keep credential lease alive (every 60s) + refresh playlist (every 5min)
-  // Sends isWatching=true when player is open, false when idle.
-  // Server uses different timeouts: 5min for watching, 2min for idle.
+  // Heartbeat: keep the credential lease alive (every 60s).
+  // isWatching=true when the player is open and the tab is visible.
   useEffect(() => {
-    if (!session) return;
+    if (!session?.sessionId) return;
+    const sid = session.sessionId;
 
-    const sendHeartbeat = async () => {
-      if (session?.sessionId) {
-        const isWatching = playingUrl !== null && !document.hidden;
-        await supabase
-          .from('credential_leases')
-          .update({ 
-            last_activity: new Date().toISOString(),
-            is_watching: isWatching 
-          })
-          .eq('session_id', session.sessionId);
-      }
+    const sendHeartbeat = () => {
+      api.heartbeat(sid, playingUrl !== null && !document.hidden);
     };
 
-    // Heartbeat every 60s
-    const heartbeatInterval = setInterval(sendHeartbeat, 60 * 1000);
+    const interval = setInterval(sendHeartbeat, 60 * 1000);
+    const onVisibilityChange = () => sendHeartbeat();
+    const onPageHide = () => api.logoutBeacon(sid);
 
-    // When tab becomes hidden/visible, send heartbeat immediately to update status
-    const onVisibilityChange = () => {
-      sendHeartbeat();
-    };
     document.addEventListener('visibilitychange', onVisibilityChange);
-
-    // Release this device's session when user closes/navigates away
-    const onBeforeUnload = () => {
-      if (session?.sessionId) {
-        // Use Supabase REST directly via sendBeacon (fire-and-forget on unload)
-        supabase
-          .from('credential_leases')
-          .delete()
-          .eq('session_id', session.sessionId)
-          .then(() => {});
-      }
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
 
     return () => {
-      clearInterval(heartbeatInterval);
+      clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
     };
-  }, [session, playingUrl]);
+  }, [session?.sessionId, playingUrl]);
 
   const handleBack = () => setCurrentPage('home');
   const goSearch = useCallback(() => setCurrentPage('search'), []);
 
-  // When user stops watching, immediately tell server (faster credential release)
-  const handleStopPlaying = useCallback(async () => {
+  // When the user stops watching, tell the server immediately (faster release)
+  const handleStopPlaying = useCallback(() => {
     setPlayingUrl(null);
-    if (session?.sessionId) {
-      await supabase
-        .from('credential_leases')
-        .update({ is_watching: false })
-        .eq('session_id', session.sessionId);
-    }
-  }, [session]);
+    if (sessionRef.current?.sessionId) api.heartbeat(sessionRef.current.sessionId, false);
+  }, []);
 
   const handleRefresh = useCallback(() => {
-    const saved = localStorage.getItem(AUTH_KEY);
-    if (saved) {
-      const stored = JSON.parse(saved);
-      if (stored._playlistUrl) {
-        toast('Atualizando o conteúdo...', 'info');
-        loadPlaylist(stored._playlistUrl);
-      }
-    }
-  }, [loadPlaylist]);
+    const s = sessionRef.current;
+    if (!s) return;
+    toast('Atualizando o conteúdo...', 'info');
+    setPlaylistLoading(true);
+    const p = s.rewardCode
+      ? doCodeLogin(s.rewardCode, s.sessionId)
+      : doLogin(s.username, s.password, s.sessionId);
+    p.then(ok => { if (ok) toast('Conteúdo atualizado.', 'success'); })
+     .finally(() => setPlaylistLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Global keyboard shortcut: '/' or Ctrl+F → open search
   useEffect(() => {
     if (!session) return;
     const handler = (e: KeyboardEvent) => {
-      // Don't hijack when user is typing in an input/textarea
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === '/' || (e.ctrlKey && e.key === 'f')) {
@@ -425,27 +273,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [session]);
 
-  // Loading screen
-  if (currentPage === 'loading') {
-    const totalItems = (playlist?.live?.length || 0) + (playlist?.movies?.length || 0) + (playlist?.series?.length || 0);
-    return (
-      <div className="loading-screen">
-        <div className="spinner" />
-        <p>Carregando playlist...</p>
-        {totalItems > 0 && <p style={{ fontSize: '0.9rem', color: '#4caf50' }}>{totalItems} itens processados</p>}
-        <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
-          Aguarde, isso pode levar alguns segundos
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="app-container">
       {playlistLoading && (
         <div className="playlist-loading-overlay">
           <div className="spinner" />
-          <p>Atualizando conteúdo...</p>
+          <p>Carregando conteúdo...</p>
         </div>
       )}
 
@@ -455,19 +288,19 @@ export default function App() {
       )}
 
       {currentPage === 'home' && (
-        <HomePage 
-          clock={clock} 
-          mac={session?.username || ''} 
-          playlistName={session?.playlistName || ''} 
-          onNavigate={setCurrentPage} 
+        <HomePage
+          clock={clock}
+          mac={session?.username || ''}
+          playlistName={session?.playlistName || ''}
+          onNavigate={setCurrentPage}
         />
       )}
 
       {currentPage === 'livetv' && (
-        <LiveTvPage 
-          items={playlist?.live || []} 
-          onBack={handleBack} 
-          onPlay={setPlayingUrl} 
+        <LiveTvPage
+          items={playlist?.live || []}
+          onBack={handleBack}
+          onPlay={setPlayingUrl}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -475,11 +308,11 @@ export default function App() {
       )}
 
       {currentPage === 'movies' && (
-        <MovieGridPage 
-          title="Filmes" 
-          items={playlist?.movies || []} 
-          onBack={handleBack} 
-          onPlay={setPlayingUrl} 
+        <MovieGridPage
+          title="Filmes"
+          items={playlist?.movies || []}
+          onBack={handleBack}
+          onPlay={setPlayingUrl}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -487,11 +320,11 @@ export default function App() {
       )}
 
       {currentPage === 'series' && (
-        <MovieGridPage 
-          title="Séries" 
-          items={playlist?.series || []} 
-          onBack={handleBack} 
-          onPlay={setPlayingUrl} 
+        <MovieGridPage
+          title="Séries"
+          items={playlist?.series || []}
+          onBack={handleBack}
+          onPlay={setPlayingUrl}
           onSearch={goSearch}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -499,14 +332,14 @@ export default function App() {
       )}
 
       {currentPage === 'favorites' && (
-        <LiveTvPage 
+        <LiveTvPage
           title="Favoritos"
-          items={favorites.map(f => ({ 
-            name: f.itemName, 
-            type: f.itemType, 
-            group: f.itemGroup || 'Favoritos', 
-            logo: f.itemLogo || '', 
-            url: f.itemUrl 
+          items={favorites.map(f => ({
+            name: f.itemName,
+            type: f.itemType,
+            group: f.itemGroup || 'Favoritos',
+            logo: f.itemLogo || '',
+            url: f.itemUrl,
           }))}
           onBack={handleBack}
           onPlay={setPlayingUrl}
@@ -516,9 +349,9 @@ export default function App() {
       )}
 
       {currentPage === 'search' && (
-        <SearchPage 
-          playlist={playlist} 
-          onBack={handleBack} 
+        <SearchPage
+          playlist={playlist}
+          onBack={handleBack}
           onPlay={setPlayingUrl}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}

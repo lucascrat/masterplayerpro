@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { supabase } from './lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import * as api from './lib/api';
+import { ApiError } from './lib/api';
+import { toast } from './components/Toast';
 import type { DeviceInfo } from './types';
 
 // Pages
@@ -10,8 +12,7 @@ import AdminDevices from './pages/admin/AdminDevices';
 import AdminPlaylists from './pages/admin/AdminPlaylists';
 import AdminUsers from './pages/admin/AdminUsers';
 
-const ADMIN_SESSION_KEY = 'masterplayer_admin';
-const DEFAULT_ADMIN_ID = '4a5e54c2-8954-438b-9e9d-4daad9674807';
+const ADMIN_KEY_STORAGE = 'masterplayer_admin_key';
 
 export default function Admin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -22,328 +23,135 @@ export default function Admin() {
   const [iptvCredentials, setIptvCredentials] = useState<any[]>([]);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Modal state for editing
+  // Modal state for editing devices
   const [showModal, setShowModal] = useState(false);
   const [editDevice, setEditDevice] = useState<any>(null);
 
-  // Restore session on mount
+  // Restore session on mount — validate the stored key against the API
   useEffect(() => {
-    const saved = localStorage.getItem(ADMIN_SESSION_KEY);
-    if (saved === 'active') {
-      setIsLoggedIn(true);
+    const savedKey = localStorage.getItem(ADMIN_KEY_STORAGE);
+    if (!savedKey) return;
+    api.setAdminKey(savedKey);
+    api.admin.verify()
+      .then(() => setIsLoggedIn(true))
+      .catch(() => localStorage.removeItem(ADMIN_KEY_STORAGE));
+  }, []);
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [d, p, u, c] = await Promise.all([
+        api.admin.getDevices(),
+        api.admin.getPlaylists(),
+        api.admin.getAppUsers(),
+        api.admin.getIptvCredentials(),
+      ]);
+      setDevices(d as DeviceInfo[]);
+      setPlaylists(p);
+      setAppUsers(u);
+      setIptvCredentials(c);
+    } catch (err) {
+      console.error('Failed to fetch admin data:', err);
+      toast('Falha ao carregar dados do servidor.', 'error');
     }
   }, []);
 
-  const fetchAll = async () => {
-    try {
-      // Fetch data from Supabase (masterplayer schema is default in src/lib/supabase.ts)
-      const [
-        { data: dData },
-        { data: pData },
-        { data: uData },
-        { data: cData }
-      ] = await Promise.all([
-        supabase.from('devices').select('*, playlists(*)').order('created_at', { ascending: false }),
-        supabase.from('playlists').select('*').order('created_at', { ascending: false }),
-        supabase.from('app_users').select('*, credential_leases(*, iptv_credentials(*, playlists(*)))').order('created_at', { ascending: false }),
-        supabase.from('iptv_credentials').select('*, playlists(*), credential_leases(*, app_users(*))').order('created_at', { ascending: false }),
-      ]);
-
-      // Map snake_case to camelCase and handle relations
-      setDevices((dData || []).map((d: any) => ({
-        id: d.id,
-        macAddress: d.mac_address,
-        name: d.name,
-        isActive: d.is_active,
-        playlistId: d.playlist_id,
-        playlist: d.playlists ? { id: d.playlists.id, name: d.playlists.name } : null,
-        createdAt: d.created_at
-      })));
-
-      setPlaylists((pData || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        url: p.url,
-        username: p.username,
-        password: p.password,
-        type: p.type,
-        isActive: p.is_active,
-        createdAt: p.created_at,
-        updatedAt: p.created_at // Use created_at as fallback for updatedAt
-      })));
-
-      setAppUsers((uData || []).map((u: any) => ({
-        id: u.id,
-        username: u.username,
-        password: u.password,
-        name: u.name,
-        isActive: u.is_active,
-        playlist_id: u.playlist_id,
-        createdAt: u.created_at,
-        leases: (u.credential_leases || []).map((l: any) => ({
-          credential: {
-            username: l.iptv_credentials?.username,
-            playlist: { name: l.iptv_credentials?.playlists?.name || 'Sem Nome' }
-          }
-        }))
-      })));
-
-      setIptvCredentials((cData || []).map((c: any) => ({
-        id: c.id,
-        username: c.username,
-        password: c.password,
-        playlistId: c.playlist_id,
-        playlist: c.playlists ? { id: c.playlists.id, name: c.playlists.name } : { id: '', name: 'Sem Playlist' },
-        maxLeases: c.max_leases,
-        isActive: c.is_active,
-        createdAt: c.created_at,
-        leases: (c.credential_leases || []).map((l: any) => ({
-          appUser: { id: l.app_users?.id, username: l.app_users?.username }
-        }))
-      })));
-
-    } catch (err) {
-      console.error('Failed to fetch admin data from Supabase:', err);
-    }
-  };
-
   useEffect(() => {
     if (isLoggedIn) fetchAll();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, fetchAll]);
 
-  const handleLogin = async (user: string, pass: string) => {
+  // AdminLogin passes (username, password) — we treat the password field as the
+  // admin key. Username is cosmetic.
+  const handleLogin = async (_user: string, key: string) => {
     try {
-      const { data, error } = await supabase
-        .from('admin_users')
-        .select('*')
-        .eq('username', user)
-        .eq('password', pass)
-        .single();
-
-      if (error || !data) {
-        setLoginError('Usuário ou senha inválidos');
-        return;
-      }
-
-      localStorage.setItem(ADMIN_SESSION_KEY, 'active');
+      api.setAdminKey(key);
+      await api.admin.verify();
+      localStorage.setItem(ADMIN_KEY_STORAGE, key);
       setIsLoggedIn(true);
       setLoginError(null);
     } catch (err) {
-      setLoginError('Erro ao conectar com o banco de dados');
+      api.setAdminKey('');
+      setLoginError(err instanceof ApiError && err.status === 401 ? 'Chave de acesso inválida' : 'Erro ao conectar com o servidor');
     }
   };
 
-  const toggleDeviceActive = async (id: string, current: boolean) => {
+  const handleLogout = () => {
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
+    api.setAdminKey('');
+    setIsLoggedIn(false);
+  };
+
+  const guard = async (fn: () => Promise<unknown>, errMsg: string, okMsg?: string) => {
     try {
-      await supabase.from('devices').update({ is_active: !current }).eq('id', id);
-      fetchAll();
+      await fn();
+      await fetchAll();
+      if (okMsg) toast(okMsg, 'success');
     } catch (err) {
-      alert('Erro ao atualizar dispositivo');
+      toast(err instanceof ApiError ? err.message : errMsg, 'error');
     }
   };
 
-  const deleteDevice = async (id: string) => {
+  // ── Devices ─────────────────────────────────────────────────────
+  const toggleDeviceActive = (id: string, current: boolean) =>
+    guard(() => api.admin.updateDevice(id, { isActive: !current }), 'Erro ao atualizar dispositivo');
+
+  const deleteDevice = (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este dispositivo?')) return;
-    try {
-      await supabase.from('devices').delete().eq('id', id);
-      fetchAll();
-    } catch (err) {
-      alert('Erro ao excluir dispositivo');
-    }
+    guard(() => api.admin.deleteDevice(id), 'Erro ao excluir dispositivo');
   };
 
-  const saveDevice = async (e: React.FormEvent) => {
+  const saveDevice = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const payload = {
-        mac_address: editDevice.macAddress,
-        is_active: editDevice.isActive,
-        playlist_id: editDevice.playlistId || null
-      };
-
-      if (editDevice.id) {
-        await supabase.from('devices').update(payload).eq('id', editDevice.id);
-      } else {
-        await supabase.from('devices').insert([payload]);
-      }
-      setShowModal(false);
-      fetchAll();
-    } catch (err) {
-      alert('Erro ao salvar dispositivo');
-    }
+    const payload = {
+      macAddress: editDevice.macAddress,
+      isActive: !!editDevice.isActive,
+      playlistId: editDevice.playlistId || null,
+    };
+    const op = editDevice.id
+      ? () => api.admin.updateDevice(editDevice.id, payload)
+      : () => api.admin.createDevice(payload);
+    guard(op, 'Erro ao salvar dispositivo').then(() => setShowModal(false));
   };
 
-  const deletePlaylist = async (id: string) => {
-    if (!confirm('Tem certeza? Isso apagará também todas as credenciais IPTV vinculadas a esta lista.')) return;
-    try {
-      // 1. Buscar credenciais vinculadas para limpar leases
-      const { data: creds } = await supabase.from('iptv_credentials').select('id').eq('playlist_id', id);
-      const credIds = (creds || []).map(c => c.id);
-
-      if (credIds.length > 0) {
-        // 2. Limpar leases dessas credenciais
-        await supabase.from('credential_leases').delete().in('credential_id', credIds);
-        // 3. Limpar as credenciais
-        await supabase.from('iptv_credentials').delete().in('id', credIds);
-      }
-
-      // 4. Limpar dispositivos que apontam para esta playlist (set null)
-      await supabase.from('devices').update({ playlist_id: null }).eq('playlist_id', id);
-
-      // 5. Finalmente apagar a playlist
-      const { error } = await supabase.from('playlists').delete().eq('id', id);
-      
-      if (error) {
-        alert('Erro do banco ao apagar playlist: ' + error.message);
-        return;
-      }
-      fetchAll();
-      alert('Playlist e dependências removidas com sucesso.');
-    } catch (err: any) {
-      alert('Erro ao excluir playlist: ' + err.message);
-    }
+  // ── Playlists ───────────────────────────────────────────────────
+  const deletePlaylist = (id: string) => {
+    if (!confirm('Tem certeza? Isso apagará também as credenciais IPTV vinculadas a esta lista.')) return;
+    guard(() => api.admin.deletePlaylist(id), 'Erro ao excluir playlist', 'Playlist removida.');
   };
 
-  const addPlaylist = async () => {
+  const addPlaylist = () => {
     const name = prompt('Nome da Playlist:');
+    if (!name) return;
     const url = prompt('URL da Playlist (M3U):');
-    if (!name || !url) return;
-
-    try {
-      // Tentar extrair username e password da URL automaticamente
-      let extractedUser = '';
-      let extractedPass = '';
-      try {
-        const urlObj = new URL(url);
-        extractedUser = urlObj.searchParams.get('username') || '';
-        extractedPass = urlObj.searchParams.get('password') || '';
-      } catch (e) {
-        // Se não for uma URL válida com searchParams, tenta um fallback simples
-        const userMatch = url.match(/[?&]username=([^&]+)/);
-        const passMatch = url.match(/[?&]password=([^&]+)/);
-        if (userMatch) extractedUser = userMatch[1];
-        if (passMatch) extractedPass = passMatch[1];
-      }
-
-      // 1. Criar a Playlist
-      const { data: pData, error: pError } = await supabase.from('playlists').insert([{
-        name,
-        url,
-        admin_id: DEFAULT_ADMIN_ID,
-        type: 'M3U',
-        is_active: true
-      }]).select().single();
-
-      if (pError) throw pError;
-
-      // 2. Se extraiu credenciais, criar automaticamente a Credencial IPTV vinculada
-      if (extractedUser && extractedPass && pData) {
-        await supabase.from('iptv_credentials').insert([{
-          username: extractedUser,
-          password: extractedPass,
-          playlist_id: pData.id,
-          max_leases: 2,
-          is_active: true
-        }]);
-      }
-
-      fetchAll();
-      alert('Playlist adicionada com sucesso!' + (extractedUser ? ' (Credenciais extraídas e vinculadas automaticamente)' : ''));
-    } catch (err: any) {
-      alert(`Erro ao adicionar playlist: ${err.message || 'Erro desconhecido'}`);
-    }
+    if (!url) return;
+    guard(
+      () => api.admin.createPlaylist({ name, url }),
+      'Erro ao adicionar playlist',
+      'Playlist adicionada. Credenciais extraídas da URL quando possível.',
+    );
   };
 
-  const updatePlaylist = async (id: string, data: { username: string; password: string }) => {
-    try {
-      await supabase.from('playlists').update(data).eq('id', id);
-      fetchAll();
-    } catch (err) {
-      alert('Erro ao atualizar credenciais da playlist');
-    }
-  };
+  const updatePlaylist = (id: string, data: { username: string; password: string }) =>
+    guard(() => api.admin.updatePlaylist(id, data), 'Erro ao atualizar credenciais da playlist');
 
-  // App Users CRUD
-  const createAppUser = async (data: { username: string; password: string; name?: string }) => {
-    try {
-      const { error } = await supabase.from('app_users').insert([{
-        username: data.username.trim().toLowerCase(),
-        password: data.password,
-        name: data.name,
-        is_active: true
-      }]);
-      if (error) throw error;
-      fetchAll();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao criar usuário');
-    }
-  };
+  // ── App users ───────────────────────────────────────────────────
+  const createAppUser = (data: { username: string; password: string; name?: string }) =>
+    guard(() => api.admin.createAppUser(data), 'Erro ao criar usuário', 'Usuário criado.');
 
-  const updateAppUser = async (id: string, data: any) => {
-    try {
-      const payload: any = {};
-      if (data.username !== undefined) payload.username = data.username.trim().toLowerCase();
-      if (data.password !== undefined) payload.password = data.password;
-      if (data.name !== undefined) payload.name = data.name;
-      if (data.isActive !== undefined) payload.is_active = data.isActive;
-      if (data.playlistId !== undefined) payload.playlist_id = data.playlistId || null;
+  const updateAppUser = (id: string, data: any) =>
+    guard(() => api.admin.updateAppUser(id, data), 'Erro ao atualizar usuário');
 
-      await supabase.from('app_users').update(payload).eq('id', id);
-      fetchAll();
-    } catch (err) {
-      alert('Erro ao atualizar usuário');
-    }
-  };
-
-  const deleteAppUser = async (id: string) => {
+  const deleteAppUser = (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
-    try {
-      const { error } = await supabase.from('app_users').delete().eq('id', id);
-      if (error) {
-        alert('Erro do banco: ' + error.message);
-        return;
-      }
-      fetchAll();
-    } catch (err: any) {
-      alert('Erro ao excluir usuário: ' + err.message);
-    }
+    guard(() => api.admin.deleteAppUser(id), 'Erro ao excluir usuário');
   };
 
-  // IPTV Credentials CRUD
-  const createIptvCredential = async (data: { username: string; password: string; playlistId?: string; maxLeases?: number }) => {
-    try {
-      const { error } = await supabase.from('iptv_credentials').insert([{
-        username: data.username,
-        password: data.password,
-        playlist_id: data.playlistId,
-        max_leases: data.maxLeases || 2,
-        is_active: true
-      }]);
-      if (error) throw error;
-      fetchAll();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao criar credencial');
-    }
-  };
+  // ── IPTV credentials ────────────────────────────────────────────
+  const createIptvCredential = (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) =>
+    guard(() => api.admin.createIptvCredential(data), 'Erro ao criar credencial', 'Credencial criada.');
 
-  const deleteIptvCredential = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta credencial? Todos os usuários usando ela serão desconectados.')) return;
-    try {
-      // 1. Limpar leases desta credencial
-      await supabase.from('credential_leases').delete().eq('credential_id', id);
-
-      // 2. Apagar a credencial
-      const { error } = await supabase.from('iptv_credentials').delete().eq('id', id);
-      
-      if (error) {
-        alert('Erro do banco: ' + error.message);
-        return;
-      }
-      fetchAll();
-      alert('Credencial removida.');
-    } catch (err: any) {
-      alert('Erro ao excluir credencial: ' + err.message);
-    }
+  const deleteIptvCredential = (id: string) => {
+    if (!confirm('Tem certeza? Todos os usuários usando esta credencial serão desconectados.')) return;
+    guard(() => api.admin.deleteIptvCredential(id), 'Erro ao excluir credencial', 'Credencial removida.');
   };
 
   if (!isLoggedIn) {
@@ -351,16 +159,16 @@ export default function Admin() {
   }
 
   return (
-    <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { localStorage.removeItem(ADMIN_SESSION_KEY); setIsLoggedIn(false); }}>
+    <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout}>
       {activeTab === 'dashboard' && (
         <AdminDashboard devices={devices} playlists={playlists} />
       )}
 
       {activeTab === 'devices' && (
-        <AdminDevices 
-          devices={devices} 
-          playlists={playlists} 
-          onToggleActive={toggleDeviceActive} 
+        <AdminDevices
+          devices={devices}
+          playlists={playlists}
+          onToggleActive={toggleDeviceActive}
           onDelete={deleteDevice}
           onOpenEdit={(d) => { setEditDevice(d); setShowModal(true); }}
         />
@@ -427,7 +235,7 @@ export default function Admin() {
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', textTransform: 'none' }}>
                     <input
                       type="checkbox"
-                      checked={editDevice.isActive}
+                      checked={!!editDevice.isActive}
                       onChange={e => setEditDevice({ ...editDevice, isActive: e.target.checked })}
                     />
                     Dispositivo Ativado

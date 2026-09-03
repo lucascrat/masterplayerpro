@@ -2,14 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 
 // For now, this is a simple key check to match existing behavior, 
 // but prepared for full JWT implementation.
+const ADMIN_KEY = process.env.ADMIN_KEY || 'master2024';
+
 export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  
-  if (authHeader === 'master2024') {
+  const authHeader = req.headers.authorization || '';
+  // Accept either the raw key or a "Bearer <key>" form.
+  const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+  if (provided && provided === ADMIN_KEY) {
     return next();
   }
 
-  // In a real JWT setup, we would verify the token here
-  // For this version, we stick to the provided key for simplicity but wrapped in middleware
   res.status(401).json({ error: 'Unauthorized' });
 };
