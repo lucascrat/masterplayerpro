@@ -200,15 +200,20 @@ app.get('/api/proxy', async (req, res) => {
   // console.log(`[Proxy] Request: ${targetUrl}`);
 
   // ── Relay path ────────────────────────────────────────────────────────────
-  // Route through the residential agent (dodges the datacenter 403) when it's
-  // connected AND either: this is a manifest for a scoped host, or the request
-  // was tagged &relay=1 by a manifest we already fetched via the relay (its
-  // segments live on CDN hosts that also block the datacenter).
-  const forceRelay = req.query['relay'] === '1';
+  // The residential agent dodges the provider's datacenter 403 — but it also
+  // pushes traffic through a home uplink, so use it only where it's needed:
+  //
+  //   manifests (KB, and the endpoint that IS blocked)  -> relay first
+  //   segments  (MB, often on a CDN that allows us)     -> server-direct first,
+  //                                                        relay only on failure
+  //
+  // `&relay=1` (stamped on children of a relayed manifest) marks a segment as
+  // relay-*eligible*, not relay-mandatory.
+  const relayAllowed = req.query['relay'] === '1';
   const manifestReq = isManifestUrl(targetUrl);
-  const relayEligible = hasRelayAgent() &&
-    (forceRelay || (manifestReq && hostInScope(targetUrl)));
-  if (relayEligible) {
+  const relayFirst = hasRelayAgent() &&
+    ((manifestReq && (relayAllowed || hostInScope(targetUrl))));
+  if (relayFirst) {
     // Serve a very-fresh cached manifest without bothering the agent.
     if (manifestReq) {
       const c = manifestCache.get(targetUrl);
@@ -347,6 +352,27 @@ app.get('/api/proxy', async (req, res) => {
   } catch (err: any) {
     const upstreamStatus = err?.response?.status;
     console.error(`[Proxy Error] ${targetUrl.split('?')[0]} -> ${err.message}${upstreamStatus ? ` (upstream ${upstreamStatus})` : ''}`);
+
+    // Segment fell over going direct (CDN blocks our datacenter IP). If the
+    // parent manifest came via the relay, this segment may go that way too —
+    // last resort, because it costs the agent's uplink.
+    if (!res.headersSent && relayAllowed && !manifestReq && hasRelayAgent()) {
+      try {
+        const r = await relayGet(targetUrl, {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        });
+        if (r.status >= 200 && r.status < 400 && r.body.length) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Content-Type', r.headers['content-type'] || 'video/mp2t');
+          res.send(r.body);
+          return;
+        }
+      } catch (e: any) {
+        console.warn(`[Proxy] segment relay fallback failed: ${e.message}`);
+      }
+    }
+
     if (!res.headersSent) {
       // Forward a definitive upstream verdict (429 rate-limited, 403 blocked,
       // 404 gone) so the player can say something useful instead of "timeout".

@@ -238,17 +238,31 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       persist();
     };
 
-    const onPlaying = () => { clearTO(); setLoading(false); maybeResume(); };
-    const onCanPlay = () => { clearTO(); setLoading(false); maybeResume(); };
+    // Chrome refuses un-muted autoplay without a user gesture: play() rejects,
+    // the video sits paused and the spinner never clears. Fall back to muted
+    // autoplay (always allowed) so the stream actually starts.
+    const startPlayback = () => {
+      video.play().catch(() => {
+        video.muted = true;
+        video.play().catch(() => { /* user will hit play */ });
+      });
+    };
+
+    const clearSpinner = () => { clearTO(); setLoading(false); };
+    const onPlaying    = () => { clearSpinner(); maybeResume(); };
+    const onCanPlay    = () => { clearSpinner(); maybeResume(); startPlayback(); };
+    const onLoadedData = () => clearSpinner();   // frames decoded — we're up
     const onLoadedMeta = () => maybeResume();
-    const onWaiting = () => setLoading(true);
-    const onError   = () => {
+    // Only re-arm the spinner for a genuine mid-stream stall.
+    const onWaiting    = () => { if (video.readyState < 3) setLoading(true); };
+    const onError      = () => {
       console.error('[Player] Erro no elemento video');
       failStream('Não foi possível reproduzir este conteúdo.');
     };
 
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('loadeddata', onLoadedData);
     video.addEventListener('loadedmetadata', onLoadedMeta);
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('waiting', onWaiting);
@@ -259,7 +273,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       // Direct playback for MP4/MKV
       video.src = effectiveUrl;
       video.load();
-      video.play().catch(() => {});
+      startPlayback();
     } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -278,7 +292,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
 
       hls.loadSource(source);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      hls.on(Hls.Events.MANIFEST_PARSED, () => startPlayback());
       hls.on(Hls.Events.ERROR, (_ev, data) => {
         console.warn(`[Player] HLS Error: ${data.details} (fatal=${data.fatal})`);
         if (!data.fatal) return;
@@ -321,7 +335,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       // Safari/iOS
       video.src = effectiveUrl;
       video.load();
-      video.play().catch(() => {});
+      startPlayback();
     } else {
       clearTO();
       setError('Navegador incompatível com este formato.');
@@ -332,6 +346,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       persist(); // remember position on close / source change
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('loadeddata', onLoadedData);
       video.removeEventListener('loadedmetadata', onLoadedMeta);
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('waiting', onWaiting);
