@@ -66,6 +66,8 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
+  // Set once a 'direct' source fails — the rest will fail identically.
+  const directHopelessRef = useRef(false);
 
   // Logical candidate URLs (quality variants). Falls back to just [url].
   const candidates = (fallbackUrls && fallbackUrls.length > 0) ? fallbackUrls : [url];
@@ -84,7 +86,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
   const [activeIdx, setActiveIdx] = useState(0);
 
   // New item selected upstream → restart from the first source.
-  useEffect(() => { setActiveIdx(0); setRetry(0); }, [url]);
+  useEffect(() => { setActiveIdx(0); setRetry(0); directHopelessRef.current = false; }, [url]);
 
   const active = sourceChain[Math.min(activeIdx, sourceChain.length - 1)]
     ?? { playUrl: url, mode: 'proxy' as DeliveryMode, originalUrl: url };
@@ -180,35 +182,46 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
 
-    // A source failed (stall/timeout/fatal error). If another source remains
-    // (proxy fallback, or next quality variant) advance to it silently;
-    // otherwise surface the error screen.
+    // A source failed (stall/timeout/fatal error). Advance to the next usable
+    // source silently; only surface the error screen once none are left.
     let failed = false;
     const failStream = (msg: string) => {
       if (failed) return;
       failed = true;
       clearTO();
-      if (hasNextCandidate) {
-        const next = sourceChain[activeIdx + 1];
-        console.log(`[Player] Fonte ${activeIdx + 1} (${active.mode}) falhou — tentando ${next?.mode}…`);
-        // Only nag the user when we actually change quality, not on a
+
+      // Once a direct attempt has failed, every other direct source will fail
+      // the same way (this provider serves segments from an HTTP-only CDN, so
+      // an HTTPS page can never load them). Skip them instead of burning a
+      // timeout on each.
+      if (active.mode === 'direct') directHopelessRef.current = true;
+
+      let next = activeIdx + 1;
+      if (directHopelessRef.current) {
+        while (next < sourceChain.length && sourceChain[next].mode === 'direct') next++;
+      }
+
+      if (next < sourceChain.length) {
+        const n = sourceChain[next];
+        console.log(`[Player] Fonte ${activeIdx + 1} (${active.mode}) falhou — indo para ${next + 1} (${n.mode})`);
+        // Only tell the user when the quality actually changes, not on a
         // transparent direct→proxy switch of the same stream.
-        if (next && next.originalUrl !== active.originalUrl) {
+        if (n.originalUrl !== active.originalUrl) {
           toast('Tentando outra qualidade…', 'info', 2500);
         }
-        setActiveIdx(i => i + 1);
+        setActiveIdx(next);
       } else {
         setLoading(false);
         setError(msg);
       }
     };
 
-    // Direct attempts that are going to fail (no CORS / blocked) usually error
-    // fast, but cap the wait shorter so the proxy fallback kicks in quickly.
+    // A doomed direct attempt normally errors within a second or two; the cap
+    // is just a backstop. The proxy path gets the real budget.
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       failStream('O servidor demorou muito para responder. Tente o VLC.');
-    }, active.mode === 'direct' ? 13000 : 20000);
+    }, active.mode === 'direct' ? 8000 : 18000);
 
     // ── Resume where the user left off (VOD only; live streams have no
     //    finite duration so saveProgress simply ignores them) ──────────
@@ -297,7 +310,13 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
         console.warn(`[Player] HLS Error: ${data.details} (fatal=${data.fatal})`);
         if (!data.fatal) return;
 
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries < MAX_NET_RETRIES) {
+        const code = data.response?.code;
+        // A verdict like 403/404/410/429 will not change by reconnecting —
+        // reconnecting just burns the whole timeout before we move on, which
+        // is what left the player spinning. Go to the next source now.
+        const permanent = [403, 404, 410, 429].includes(code as number);
+
+        if (!permanent && data.type === Hls.ErrorTypes.NETWORK_ERROR && netRetries < MAX_NET_RETRIES) {
           netRetries++;
           console.log(`[Player] Reconectando (${netRetries}/${MAX_NET_RETRIES})...`);
           setLoading(true);
@@ -305,14 +324,13 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
           return;
         }
 
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < MAX_MEDIA_RETRIES) {
+        if (!permanent && data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < MAX_MEDIA_RETRIES) {
           mediaRetries++;
           console.log(`[Player] Recuperando erro de mídia (${mediaRetries}/${MAX_MEDIA_RETRIES})...`);
           hls.recoverMediaError();
           return;
         }
 
-        const code = data.response?.code;
         let errorMsg = 'Não foi possível reproduzir este conteúdo.';
         if (code === 429) {
           errorMsg = 'O provedor limitou este canal agora (muitas conexões). Tente outra qualidade ou aguarde alguns minutos.';
