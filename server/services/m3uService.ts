@@ -8,6 +8,7 @@ interface M3UItem {
   group: string;
   url: string;
   type: 'live' | 'movie' | 'series';
+  tvgId?: string;
 }
 
 interface PlaylistData {
@@ -187,6 +188,8 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
           const groupMatch = line.match(/group-title="([^"]*)"/);
           // Normalize immediately so the rest of the app sees clean names
           currentItem.group = normalizeGroupName(groupMatch ? groupMatch[1] : 'Default');
+          const tvgIdMatch = line.match(/tvg-id="([^"]*)"/);
+          currentItem.tvgId = tvgIdMatch ? tvgIdMatch[1] : '';
         } else if (line.startsWith('http')) {
           currentItem.url = line;
           // Classify using the RAW group-title (before normalization) for best accuracy,

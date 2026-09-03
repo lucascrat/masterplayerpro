@@ -102,6 +102,149 @@ export function sortCategories(cats: string[], order: string[]): string[] {
   });
 }
 
+// ── Quality deduplication ─────────────────────────────────────────────────────
+// Matches trailing quality/encoding tokens: SD, HD, FHD, UHD, 4K, [H265], H265
+const QUALITY_SUFFIX_RE = /\s+(?:\[H\.?265\]|(?:SD|HD|FHD|UHD|4K)(?:\s+(?:H\.?265|\[H\.?265\]|UHD|4K))?)$/i;
+
+/** Strip quality suffix from a channel name: "Globo FHD H265" → "Globo" */
+export function stripQuality(name: string): string {
+  return name.replace(QUALITY_SUFFIX_RE, '').trim();
+}
+
+/** Numeric rank so we can pick the best variant (higher = better) */
+function qualityRank(name: string): number {
+  const m = name.match(QUALITY_SUFFIX_RE);
+  if (!m) return 2;
+  const q = m[0].toUpperCase();
+  if (q.includes('4K') || q.includes('UHD')) return 6;
+  if (q.includes('FHD') && (q.includes('H265') || q.includes('H.265'))) return 5;
+  if (q.includes('FHD')) return 4;
+  if (q.includes('HD')) return 3;
+  if (q.includes('SD')) return 1;
+  return 2;
+}
+
+/** Human-readable quality badge extracted from the name */
+export function qualityLabel(name: string): string {
+  const m = name.match(QUALITY_SUFFIX_RE);
+  return m ? m[0].trim() : '';
+}
+
+/**
+ * Collapse SD/HD/FHD/4K variants of the same channel into a single entry.
+ * The entry's URL points to the best available quality.
+ * The original variants are stored in `item.variants` for a quality picker.
+ */
+export function deduplicateChannels(items: M3UItem[]): M3UItem[] {
+  const best = new Map<string, { item: M3UItem; rank: number }>();
+
+  for (const item of items) {
+    const baseName = stripQuality(item.name);
+    // Use tvg-id when non-empty (groups same channel across qualities reliably),
+    // otherwise fall back to the stripped name.
+    const key = (item.tvgId && item.tvgId.trim()) ? item.tvgId.trim().toLowerCase() : baseName.toLowerCase();
+    const rank = qualityRank(item.name);
+    const existing = best.get(key);
+
+    if (!existing) {
+      best.set(key, {
+        item: {
+          ...item,
+          name: baseName || item.name,
+          quality: qualityLabel(item.name),
+          variants: [item],
+        },
+        rank,
+      });
+    } else {
+      // Track all variants
+      (existing.item.variants ??= []).push(item);
+      // Upgrade to this variant if it's better quality
+      if (rank > existing.rank) {
+        existing.rank = rank;
+        existing.item.url = item.url;
+        existing.item.quality = qualityLabel(item.name);
+        // Keep best logo (prefer the newest/best entry)
+        if (item.logo && !existing.item.logo) existing.item.logo = item.logo;
+      }
+    }
+  }
+
+  return Array.from(best.values()).map(v => v.item);
+}
+
+// ── Live-channel subcategory classification ───────────────────────────────────
+export type LiveSubcategory =
+  | 'Abertos' | 'Notícias' | 'Esportes' | 'Filmes' | 'Documentários'
+  | 'Infantil' | 'Lifestyle' | 'Música' | 'Streaming' | 'Regionais' | 'Outros';
+
+export const LIVE_SUBCATEGORY_ORDER: LiveSubcategory[] = [
+  'Abertos', 'Notícias', 'Esportes', 'Filmes', 'Documentários',
+  'Infantil', 'Lifestyle', 'Streaming', 'Música', 'Regionais', 'Outros',
+];
+
+export const SUBCATEGORY_ICONS: Record<LiveSubcategory, string> = {
+  'Abertos':      '📡',
+  'Notícias':     '📰',
+  'Esportes':     '⚽',
+  'Filmes':       '🎬',
+  'Documentários':'📽',
+  'Infantil':     '🧸',
+  'Lifestyle':    '🌟',
+  'Música':       '🎵',
+  'Streaming':    '📱',
+  'Regionais':    '🗺️',
+  'Outros':       '📺',
+};
+
+export function classifyChannelSubcategory(name: string): LiveSubcategory {
+  const n = name.toLowerCase();
+
+  // Streaming platforms first (some overlap with other categories)
+  if (/disney\+?|apple\s*tv\+?|prime\s*video|amazon\s*prime|pluto\b|star\+?|peacock|hulu/.test(n))
+    return 'Streaming';
+
+  // Sports (before News so "ESPN News" → Esportes)
+  if (/\bespn\b|sportv|combate|\bdazn\b|\bf1\b|formula\s*1|motogp|nfl\b|nba\b(?!\s*es)|luta|grappling|band\s*sports|ufc\b|pfl\b|fight\b|cage\b|futebol|rugby|tenis|golf\b|olympics|olimp|caze\s*tv|varzea|betnacional|fla\s*tv/.test(n))
+    return 'Esportes';
+
+  // News
+  if (/news|noticia|jornal|jornalismo|informa[cç]|cnn|band\s*news|record\s*news|sbt\s*news|globo\s*news|city\s*hub|bm&c|cnbc|repórter/.test(n))
+    return 'Notícias';
+
+  // Kids
+  if (/cartoon|nickelodeon|\bnic[k]?\b|gloob|discovery\s*kids|boomerang|dum\s*dum|dumdum|disneyxd|teen\s*nick|baby\s*tv/.test(n))
+    return 'Infantil';
+
+  // Documentaries / Nature
+  if (/discovery(?!\s*kids|h&h)|national\s*geo|natgeo|history|animal\s*planet|\bscience|biography|biogr|crime\b|investigat|documentar|nat\s*geo|hist\s*channel/.test(n))
+    return 'Documentários';
+
+  // Music
+  if (/\bmtv\b|multishow|vh1\b|\bbis\b|rock\s*(?:in|n)|\bmúsic|\bmusic|som\s*livre|palco\s*mp3/.test(n))
+    return 'Música';
+
+  // Regional affiliates — match before generic Abertos
+  if (/\b(eptv|nsc\s*tv|inter\s*tv|rpc\b|tv\s*tribuna|tv\s*morena|tv\s*gaúcha|tv\s*centro|afiliada)\b/.test(n))
+    return 'Regionais';
+  if (/^(?:globo|sbt|record|band|redetv)\s+[a-záàâãéèêíïóôõúçñü]/i.test(name))
+    return 'Regionais';
+
+  // Free-to-air (abertos)
+  if (/^(?:globo|sbt|record|redetv|band|cultura|tv\s*brasil|gazeta|canção\s*nova|boas\s*novas|bethel|tv\s*aparecida|futura|cnb\b)\b/i.test(n))
+    return 'Abertos';
+
+  // Movies / Series channels
+  if (/cinemax|telecine|tnt\b|tnt\s*series|tnt\s*novel|\bamc\b|\baxn\b|canal\s*sony|\bmegapix|\bspace\b|\bmax\b|hbo\b|\bfx\b|\btbs\b|tnt|canal\s*brasil|cine\s*sky|cine\b/.test(n))
+    return 'Filmes';
+
+  // Lifestyle / General entertainment
+  if (/\bgnт\b|tlc\b|lifetime|food\s*network|tcm\b|fashion|e!\b|bravo\b|a&e\b|discovery\s*h&h|discovery\s*home|travel|love\s*nature|one\b/.test(n))
+    return 'Lifestyle';
+
+  return 'Outros';
+}
+
 export function groupByCategory(items: M3UItem[]): Record<string, M3UItem[]> {
   const groups: Record<string, M3UItem[]> = {};
   items.forEach(item => {

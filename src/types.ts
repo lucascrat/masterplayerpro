@@ -4,6 +4,9 @@ export interface M3UItem {
   group: string;
   url: string;
   type: 'live' | 'movie' | 'series';
+  tvgId?: string;       // raw tvg-id attribute (used for quality grouping)
+  quality?: string;     // SD | HD | FHD | FHD H265 | 4K | UHD | ''
+  variants?: M3UItem[]; // quality variants collapsed into this entry
 }
 
 export interface PlaylistData {
