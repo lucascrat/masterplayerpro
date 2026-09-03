@@ -53,15 +53,20 @@ const GROUP_NAME_MAP: Record<string, string> = {
 
 export function normalizeGroupName(raw: string): string {
   if (!raw) return raw;
+  // Drop U+FFFD replacement chars left by any upstream mis-decode.
+  raw = raw.replace(/�/g, '').replace(/\s{2,}/g, ' ').trim();
   const mapped = GROUP_NAME_MAP[raw.toLowerCase().trim()];
   if (mapped) return mapped;
-  return raw
+  const cleaned = raw
     .replace(/^\(VOD\s+[^)]+\)\s*/i, '')
     .replace(/^Canai[s]?\s*[|]\s*/i, '')
     .replace(/^Canale[s]?\s*[|]\s*/i, '')
     .replace(/^Channel[s]?\s*[|]\s*/i, '')
     .replace(/^Canal\s*[|]\s*/i, '')
     .trim() || raw;
+  // Canonicalise any "S?ries" variant that slipped past the map.
+  if (/^s.?ries(\s+br)?$/i.test(cleaned)) return 'Séries BR';
+  return cleaned;
 }
 
 // ── Category sort orders ──────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 ﻿import axios from 'axios';
+import { StringDecoder } from 'string_decoder';
 import prisma from '../db';
 import { proxyCandidates } from '../lib/upstreamProxy';
 
@@ -84,16 +85,19 @@ const GROUP_NAME_MAP: Record<string, string> = {
 
 export function normalizeGroupName(raw: string): string {
   if (!raw) return raw;
+  raw = raw.replace(/�/g, '').replace(/\s{2,}/g, ' ').trim();
   const mapped = GROUP_NAME_MAP[raw.toLowerCase().trim()];
   if (mapped) return mapped;
   // Generic prefix stripping for unknown groups
-  return raw
+  const cleaned = raw
     .replace(/^\(VOD\s+[^)]+\)\s*/i, '')
     .replace(/^Canai[s]?\s*[|]\s*/i, '')
     .replace(/^Canale[s]?\s*[|]\s*/i, '')
     .replace(/^Channel[s]?\s*[|]\s*/i, '')
     .replace(/^Canal\s*[|]\s*/i, '')
     .trim() || raw;
+  if (/^s.?ries(\s+br)?$/i.test(cleaned)) return 'Séries BR';
+  return cleaned;
 }
 
 function classifyByGroup(group: string): 'live' | 'movie' | 'series' | null {
@@ -180,10 +184,13 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
     let currentItem: Partial<M3UItem> = {};
     let leftover = '';
     let bytesRead = 0;
+    // Decodes UTF-8 across chunk boundaries — a raw chunk.toString() splits
+    // multi-byte chars (é, ã, ç…) and corrupts names like "Séries" -> "S??ries".
+    const decoder = new StringDecoder('utf8');
 
     response.data.on('data', (chunk: Buffer) => {
       bytesRead += chunk.length;
-      const text = leftover + chunk.toString('utf-8');
+      const text = leftover + decoder.write(chunk);
       const lines = text.split('\n');
       // Last line might be incomplete — save for next chunk
       leftover = lines.pop() || '';
@@ -215,6 +222,7 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
     });
 
     response.data.on('end', () => {
+      leftover += decoder.end(); // flush any trailing bytes
       // Process any remaining data
       if (leftover.trim().startsWith('http') && currentItem.name) {
         currentItem.url = leftover.trim();
