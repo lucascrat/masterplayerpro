@@ -189,6 +189,28 @@ const manifestCache = new Map<string, { body: string; at: number }>();
 const MANIFEST_FRESH_MS = 2_000;
 const MANIFEST_STALE_MS = 6_000;
 
+// Which segment CDNs refuse our datacenter IP. Learned at runtime: probing a
+// known-blocked host on every segment wastes seconds per fetch, and always
+// relaying wastes the agent's uplink on hosts that would have served us.
+const blockedHosts = new Map<string, number>(); // host -> blocked until (ms)
+const HOST_BLOCK_TTL_MS = 10 * 60_000;
+
+function hostOf(u: string): string {
+  try { return new URL(u).hostname.toLowerCase(); } catch { return ''; }
+}
+function isHostBlocked(u: string): boolean {
+  const until = blockedHosts.get(hostOf(u));
+  if (!until) return false;
+  if (Date.now() > until) { blockedHosts.delete(hostOf(u)); return false; }
+  return true;
+}
+function markHostBlocked(u: string): void {
+  const h = hostOf(u);
+  if (!h) return;
+  if (!blockedHosts.has(h)) console.log(`[Proxy] ${h} refuses our IP — relaying its segments for 10min`);
+  blockedHosts.set(h, Date.now() + HOST_BLOCK_TTL_MS);
+}
+
 app.get('/api/proxy', async (req, res) => {
   const targetUrl = String(req.query['url'] || '');
 
@@ -211,8 +233,12 @@ app.get('/api/proxy', async (req, res) => {
   // relay-*eligible*, not relay-mandatory.
   const relayAllowed = req.query['relay'] === '1';
   const manifestReq = isManifestUrl(targetUrl);
-  const relayFirst = hasRelayAgent() &&
-    ((manifestReq && (relayAllowed || hostInScope(targetUrl))));
+  const relayFirst = hasRelayAgent() && (
+    (manifestReq && (relayAllowed || hostInScope(targetUrl))) ||
+    // A segment on a CDN we've already learned refuses us: skip the doomed
+    // direct probe and relay straight away.
+    (!manifestReq && relayAllowed && isHostBlocked(targetUrl))
+  );
   if (relayFirst) {
     // Serve a very-fresh cached manifest without bothering the agent.
     if (manifestReq) {
@@ -357,6 +383,9 @@ app.get('/api/proxy', async (req, res) => {
     // parent manifest came via the relay, this segment may go that way too —
     // last resort, because it costs the agent's uplink.
     if (!res.headersSent && relayAllowed && !manifestReq && hasRelayAgent()) {
+      if ([403, 429].includes(upstreamStatus) || (upstreamStatus >= 500 && upstreamStatus < 600)) {
+        markHostBlocked(targetUrl); // remember, so the next segment skips the probe
+      }
       try {
         const r = await relayGet(targetUrl, {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
