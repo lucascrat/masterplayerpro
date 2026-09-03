@@ -11,10 +11,10 @@ import crypto from 'crypto';
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
 import adminRoutes from './routes/adminRoutes';
-import rewardsRoutes, { HOURS_PER_COIN } from './routes/rewardsRoutes';
+import rewardsRoutes from './routes/rewardsRoutes';
 import favoriteRoutes from './routes/favoriteRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, getPlaylistForUserAnyServer, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
 import prisma from './db';
 
 const __filename = fileURLToPath(import.meta.url);

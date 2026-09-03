@@ -10,10 +10,6 @@ export const toggleFavorite = async (req: Request, res: Response) => {
   }
 
   try {
-    const where: any = {
-      itemName_itemType: { itemName, itemType }
-    };
-    
     // We must find by the unique constraint that matches our input
     const filter: any = {};
     if (appUserId) filter.appUserId = appUserId;

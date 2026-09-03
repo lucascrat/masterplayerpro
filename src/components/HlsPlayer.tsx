@@ -9,11 +9,6 @@ interface HlsPlayerProps {
 // Chrome 86+ blocks ALL HTTP media (video, audio) from HTTPS pages —
 // even native <video> elements. The only fix is to route every HTTP
 // stream through our own HTTPS proxy endpoint.
-function isHlsManifest(url: string): boolean {
-  const u = url.toLowerCase().split('?')[0];
-  return u.endsWith('.m3u8') || u.includes('/hls/');
-}
-
 // ALL http:// URLs must go through /api/proxy so the browser only
 // sees HTTPS and mixed-content blocking never triggers.
 function getEffectiveUrl(url: string): string {
@@ -33,7 +28,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
   // Improved detection
   const isHls = url.toLowerCase().includes('.m3u8') || url.toLowerCase().includes('/hls/');
   const isMp4 = url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.mkv');
-  const isTs  = url.toLowerCase().includes('.ts') || (!isHls && !isMp4); // Default to TS if unknown
+  // Anything that is neither HLS nor MP4 is treated as a raw TS stream and
+  // wrapped in a virtual HLS manifest below.
 
   const effectiveUrl = getEffectiveUrl(url);
 
@@ -67,7 +63,8 @@ export default function HlsPlayer({ url, onClose }: HlsPlayerProps) {
     const timer = setTimeout(() => {
       if (isIOS || isSafari) return;
       if (document.fullscreenElement) return;
-      (video as any).webkitEnterFullscreen ? tryVideoFs() : tryFullscreen();
+      if ((video as any).webkitEnterFullscreen) tryVideoFs();
+      else tryFullscreen();
     }, 300);
 
     const onFsChange = () => {

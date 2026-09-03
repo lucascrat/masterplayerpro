@@ -1,11 +1,13 @@
 // Version: 1.0.1 - Force Cache Refresh for Serverless Migration
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
-import Admin from './Admin.tsx'
+
+// Admin panel is a separate bundle — regular viewers never download it.
+const Admin = lazy(() => import('./Admin.tsx'))
 
 // Register service worker with auto-update
 registerSW({
@@ -21,10 +23,12 @@ registerSW({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/admin/*" element={<Admin />} />
-        <Route path="/*" element={<App />} />
-      </Routes>
+      <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
+        <Routes>
+          <Route path="/admin/*" element={<Admin />} />
+          <Route path="/*" element={<App />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   </StrictMode>,
 )

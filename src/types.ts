@@ -25,7 +25,10 @@ export interface DeviceInfo {
   id: string;
   macAddress: string;
   isActive: boolean;
-  playlist: { name: string; url: string; } | null;
+  name?: string;
+  playlistId?: string | null;
+  createdAt?: string;
+  playlist: { id?: string; name: string; url?: string; } | null;
 }
 
 export interface AuthSession {

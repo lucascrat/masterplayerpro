@@ -37,7 +37,7 @@ function IOSSteps() {
 }
 
 export default function SettingsPage({ mac, device, onBack, onLogout, onRefreshPlaylist }: SettingsPageProps) {
-  const { canInstall, platform, triggerInstall, hasPrompt } = useInstallPWA();
+  const { canInstall, platform, triggerInstall } = useInstallPWA();
   const [installing, setInstalling] = useState(false);
   const [showIOSSteps, setShowIOSSteps] = useState(false);
   const [installed, setInstalled] = useState(false);

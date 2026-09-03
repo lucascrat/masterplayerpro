@@ -1,4 +1,4 @@
-import type { DeviceInfo, Page } from '../../types';
+import type { Page } from '../../types';
 import Logo from '../../components/Logo';
 import InstallBanner from '../../components/InstallBanner';
 

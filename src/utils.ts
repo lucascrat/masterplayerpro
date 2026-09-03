@@ -85,7 +85,6 @@ function classifyType(group: string, name: string): 'live' | 'movie' | 'series' 
 }
 
 export async function parseM3UFromUrl(url: string): Promise<M3UItem[]> {
-  const startTime = Date.now();
   let text = '';
   let errorDetail = '';
 

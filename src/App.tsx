@@ -1,24 +1,25 @@
 // Build Trigger: Cloudflare Pages Deployment - v1.1.2-stable
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { supabase } from './lib/supabase';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
 import { generateMAC, parseM3UFromUrl } from './utils';
 
-// Pages
+// Pages — login lands eagerly; the rest are split per route.
 import LoginScreen from './pages/client/LoginScreen';
-import HomePage from './pages/client/HomePage';
-import LiveTvPage from './pages/client/LiveTvPage';
-import MovieGridPage from './pages/client/MovieGridPage';
-import SearchPage from './pages/client/SearchPage';
-import SettingsPage from './pages/client/SettingsPage';
+const HomePage = lazy(() => import('./pages/client/HomePage'));
+const LiveTvPage = lazy(() => import('./pages/client/LiveTvPage'));
+const MovieGridPage = lazy(() => import('./pages/client/MovieGridPage'));
+const SearchPage = lazy(() => import('./pages/client/SearchPage'));
+const SettingsPage = lazy(() => import('./pages/client/SettingsPage'));
 
 // Components
-import HlsPlayer from './components/HlsPlayer';
 import RewardSessionBadge from './components/RewardSessionBadge';
 
+// hls.js is ~150 KB gzipped — only pull it in once the user actually plays something.
+const HlsPlayer = lazy(() => import('./components/HlsPlayer'));
+
 const AUTH_KEY = 'masterplayer_auth';
-const CONTENT_PAGES: Page[] = ['livetv', 'movies', 'series', 'search', 'settings'];
 
 export default function App() {
   const clock = useClock();
@@ -230,7 +231,7 @@ export default function App() {
   };
 
 
-  const doCodeLogin = async (code: string, existingSessionId?: string): Promise<boolean> => {
+  const doCodeLogin = async (_code: string): Promise<boolean> => {
     // Sistema de recompensas/código será migrado para Supabase em breve
     setLoginError('Sistema de códigos em manutenção.');
     return false;
@@ -444,6 +445,7 @@ export default function App() {
         </div>
       )}
 
+      <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
       {currentPage === 'login' && (
         <LoginScreen onLogin={doLogin} onLoginWithCode={doCodeLogin} error={loginError} loading={loginLoading} />
       )}
@@ -520,17 +522,24 @@ export default function App() {
       )}
 
       {currentPage === 'settings' && (
-        <SettingsPage 
-          mac={session?.username || ''} 
-          device={null} 
-          onBack={handleBack} 
-          onLogout={logout} 
+        <SettingsPage
+          mac={session?.username || ''}
+          device={null}
+          onBack={handleBack}
+          onLogout={logout}
           onRefreshPlaylist={handleRefresh}
         />
       )}
+      </Suspense>
 
       {playingUrl && (
-        <HlsPlayer url={playingUrl} onClose={handleStopPlaying} />
+        <Suspense fallback={
+          <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="spinner" />
+          </div>
+        }>
+          <HlsPlayer url={playingUrl} onClose={handleStopPlaying} />
+        </Suspense>
       )}
 
       {session?.rewardCode && session.accessUntil && currentPage !== 'login' && (

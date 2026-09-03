@@ -223,7 +223,7 @@ export const createIptvCredential = async (req: Request, res: Response) => {
           finalPlaylistId = existing.id;
         } else {
           // Create a new playlist for this DNS
-          let admin = await prisma.adminUser.findFirst();
+          const admin = await prisma.adminUser.findFirst();
           
           // Construct a full M3U URL if only DNS was provided
           let fullM3u = cleanUrl;

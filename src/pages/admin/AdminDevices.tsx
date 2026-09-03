@@ -8,7 +8,7 @@ interface AdminDevicesProps {
   onOpenEdit: (device: DeviceInfo) => void;
 }
 
-export default function AdminDevices({ devices, playlists, onToggleActive, onDelete, onOpenEdit }: AdminDevicesProps) {
+export default function AdminDevices({ devices, onToggleActive, onDelete, onOpenEdit }: AdminDevicesProps) {
   return (
     <>
       <div className="admin-page-header">

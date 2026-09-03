@@ -29,7 +29,7 @@ function extractYear(name: string): string | null {
 }
 
 function cleanTitle(name: string): string {
-  let cleaned = name
+  const cleaned = name
     .replace(/\(\d{4}\)/g, '')   // remove (year)
     .replace(/\[.*?\]/g, '')      // remove [LEG], [DUB], etc.
     .replace(/\b(4K|UHD|FHD|HD|SD|H264|H265|HEVC|DUBLADO|LEGENDADO|DUAL|AUDIO|S\d+)\b/gi, '')

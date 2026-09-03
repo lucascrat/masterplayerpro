@@ -1,5 +1,5 @@
 import pg from 'pg';
-// @ts-ignore - PrismaClient is generated at build time by `prisma generate`
+// @ts-expect-error - PrismaClient is generated at build time by `prisma generate`
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
@@ -10,7 +10,6 @@ pool.query('SELECT 1')
   .catch((e: Error) => console.error('DB connection failed:', e.message));
 
 const adapter = new PrismaPg(pool);
-// @ts-ignore
 const prisma = new PrismaClient({ adapter });
 
 export default prisma;

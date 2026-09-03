@@ -4,8 +4,8 @@ import Logo from '../../components/Logo';
 type Mode = 'password' | 'code';
 
 interface LoginScreenProps {
-  onLogin: (username: string, password: string) => Promise<void>;
-  onLoginWithCode: (code: string) => Promise<void>;
+  onLogin: (username: string, password: string) => Promise<boolean>;
+  onLoginWithCode: (code: string) => Promise<boolean>;
   error: string | null;
   loading: boolean;
 }
