@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
 import crypto from 'crypto';
-import { upstreamProxy } from './lib/upstreamProxy';
+import { proxyCandidates } from './lib/upstreamProxy';
 
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
@@ -171,34 +171,40 @@ app.get('/api/proxy', async (req, res) => {
     };
     if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
 
-    // IPTV providers frequently rate-limit / return transient 403/5xx on
-    // manifest & segment requests. Retry a couple of times with a short
-    // backoff before giving up — a normal viewer would never notice.
-    const isMedia = !rangeHeader; // don't retry partial-content seeks
-    const MAX_TRIES = isMedia ? 3 : 1;
+    // Try each configured proxy in turn, then direct (proxyCandidates always
+    // ends with `false`). IPTV providers 403 datacenter IPs and rate-limit,
+    // so on a retriable failure move to the next candidate; a couple of quick
+    // retries per candidate smooth over transient blips. Range/seek requests
+    // aren't retried (they must hit the same connection quickly).
+    const candidates = proxyCandidates(targetUrl);
+    const triesPer = rangeHeader ? 1 : 2;
     let upstream: AxiosResponse | undefined;
     let lastErr: any;
-    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      try {
-        upstream = await axios.get(targetUrl, {
-          responseType: 'stream',
-          timeout: 20000,       // 20s timeout
-          maxRedirects: 10,
-          headers: upstreamHeaders,
-          proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
-          validateStatus: (status) => status >= 200 && status < 400,
-        });
-        break;
-      } catch (e: any) {
-        lastErr = e;
-        const code = e?.response?.status;
-        const retriable = code === 403 || code === 429 || code === 502 || code === 503 || code === 504 || e?.code === 'ECONNRESET' || e?.code === 'ECONNABORTED';
-        if (attempt < MAX_TRIES && retriable) {
-          await new Promise(r => setTimeout(r, 350 * attempt));
-          continue;
+    for (const proxy of candidates) {
+      let advance = false;
+      for (let attempt = 1; attempt <= triesPer && !upstream; attempt++) {
+        try {
+          upstream = await axios.get(targetUrl, {
+            responseType: 'stream',
+            timeout: 20000,
+            maxRedirects: 10,
+            headers: upstreamHeaders,
+            proxy,
+            validateStatus: (status) => status >= 200 && status < 400,
+          });
+        } catch (e: any) {
+          lastErr = e;
+          const code = e?.response?.status;
+          const retriable = code === 403 || code === 429 || (code >= 500 && code < 600) ||
+            e?.code === 'ECONNRESET' || e?.code === 'ECONNABORTED' ||
+            e?.code === 'ECONNREFUSED' || e?.code === 'ETIMEDOUT';
+          if (!retriable) { advance = false; break; }   // real error — stop
+          advance = true;
+          if (attempt < triesPer) await new Promise(r => setTimeout(r, 300 * attempt));
         }
-        throw e;
       }
+      if (upstream) break;
+      if (!advance) break;   // non-retriable — don't bother with other proxies
     }
     if (!upstream) throw lastErr;
 
@@ -287,20 +293,28 @@ app.get('/api/m3u', async (req, res) => {
   }
 
   try {
-    const upstream = await axios.get(targetUrl, {
-      responseType: 'text',
-      timeout: 45000,
-      maxRedirects: 10,
-      maxContentLength: 80 * 1024 * 1024, // 80 MB cap
-      maxBodyLength: 80 * 1024 * 1024,
-      transformResponse: (d) => d, // keep as string
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-      },
-      proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
-      validateStatus: (s) => s >= 200 && s < 400,
-    });
+    let upstream: AxiosResponse | undefined;
+    let lastErr: any;
+    for (const proxy of proxyCandidates(targetUrl)) {
+      try {
+        upstream = await axios.get(targetUrl, {
+          responseType: 'text',
+          timeout: 45000,
+          maxRedirects: 10,
+          maxContentLength: 80 * 1024 * 1024, // 80 MB cap
+          maxBodyLength: 80 * 1024 * 1024,
+          transformResponse: (d) => d, // keep as string
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+          },
+          proxy,
+          validateStatus: (s) => s >= 200 && s < 400,
+        });
+        break;
+      } catch (e: any) { lastErr = e; }
+    }
+    if (!upstream) throw lastErr;
 
     const body = typeof upstream.data === 'string' ? upstream.data : String(upstream.data ?? '');
     if (!body.trim()) {

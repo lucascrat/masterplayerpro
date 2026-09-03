@@ -1,6 +1,6 @@
 ﻿import axios from 'axios';
 import prisma from '../db';
-import { upstreamProxy } from '../lib/upstreamProxy';
+import { proxyCandidates } from '../lib/upstreamProxy';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface M3UItem {
@@ -154,16 +154,24 @@ function classifyItem(name: string, group: string, url?: string): 'live' | 'movi
  */
 export async function parseM3U(url: string): Promise<PlaylistData> {
   console.log(`[M3U] Fetching: ${url.substring(0, 80)}...`);
-  const response = await axios.get(url, {
-    timeout: 300000,          // 5 minutes for very large files
-    responseType: 'stream',   // Stream instead of loading all to memory
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-    proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    },
-  });
+  let response: any;
+  let lastErr: any;
+  for (const proxy of proxyCandidates(url)) {
+    try {
+      response = await axios.get(url, {
+        timeout: 300000,          // 5 minutes for very large files
+        responseType: 'stream',   // Stream instead of loading all to memory
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        proxy,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      });
+      break;
+    } catch (e) { lastErr = e; }
+  }
+  if (!response) throw lastErr;
 
   return new Promise<PlaylistData>((resolve, reject) => {
     const live: M3UItem[] = [];
@@ -344,21 +352,25 @@ function rewriteForUser(config: RefConfig, data: PlaylistData, user: string, pas
 async function validateAgainstServer(config: RefConfig, user: string, pass: string): Promise<boolean> {
   const url = buildUserM3uUrl(config, user, pass);
   try {
-    const res = await axios.get(url, {
-      timeout: 15000,
-      responseType: 'stream',
-      maxRedirects: 5,
-      proxy: upstreamProxy(),
-      validateStatus: () => true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    });
-
-    if (res.status !== 200) {
-      res.data.destroy();
-      return false;
+    let res: any;
+    for (const proxy of proxyCandidates(url)) {
+      try {
+        res = await axios.get(url, {
+          timeout: 15000,
+          responseType: 'stream',
+          maxRedirects: 5,
+          proxy,
+          validateStatus: () => true,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          },
+        });
+        if (res.status === 200) break;   // got it; else try next candidate
+        res.data.destroy();
+        res = undefined;
+      } catch { /* try next candidate */ }
     }
+    if (!res) return false;
 
     return new Promise<boolean>((resolve) => {
       let resolved = false;
@@ -536,16 +548,24 @@ export function getServersStatus(): any[] {
  * Debug: test fetching a M3U URL and return first 500 chars + status.
  */
 export async function testFetchM3U(url: string): Promise<{ status: number; contentType: string; preview: string; size: number }> {
-  const res = await axios.get(url, {
-    timeout: 30000,
-    responseType: 'text',
-    maxContentLength: 100 * 1024 * 1024,
-    proxy: upstreamProxy(),
-    validateStatus: () => true,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    },
-  });
+  let res: any;
+  let lastErr: any;
+  for (const proxy of proxyCandidates(url)) {
+    try {
+      res = await axios.get(url, {
+        timeout: 30000,
+        responseType: 'text',
+        maxContentLength: 100 * 1024 * 1024,
+        proxy,
+        validateStatus: () => true,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      });
+      if (res.status === 200) break;
+    } catch (e) { lastErr = e; }
+  }
+  if (!res) throw lastErr;
   const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   return {
     status: res.status,
