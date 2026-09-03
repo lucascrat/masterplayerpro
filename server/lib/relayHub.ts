@@ -32,27 +32,38 @@ const RELAY_PATH = '/api/relay/agent';
 // a few MB and home upstream is the slow leg, so allow generous headroom.
 const REQUEST_TIMEOUT_MS = 15_000;
 
-let agent: WebSocket | null = null;
-let agentSince = 0;
+// Multiple agents may connect at once (e.g. the same PC started twice, or a
+// spare box). We keep them ALL and round-robin — fighting over a single slot
+// caused a reconnect storm.
+const agents = new Set<WebSocket>();
+let firstAgentAt = 0;
+let rr = 0;
 const pending = new Map<string, Pending>();
 let seq = 0;
 
+function liveAgents(): WebSocket[] {
+  return [...agents].filter(w => w.readyState === WebSocket.OPEN);
+}
+
 export function hasRelayAgent(): boolean {
-  return agent !== null && agent.readyState === WebSocket.OPEN;
+  return liveAgents().length > 0;
 }
 
 export function relayStatus() {
   return {
     connected: hasRelayAgent(),
-    since: agentSince ? new Date(agentSince).toISOString() : null,
+    agents: liveAgents().length,
+    since: firstAgentAt ? new Date(firstAgentAt).toISOString() : null,
     inflight: pending.size,
   };
 }
 
-/** Ask the connected agent to GET `url` and return the full response. */
+/** Ask a connected agent to GET `url` and return the full response. */
 export function relayGet(url: string, extraHeaders: Record<string, string> = {}): Promise<RelayResponse> {
   return new Promise((resolve, reject) => {
-    if (!hasRelayAgent()) { reject(new Error('no relay agent connected')); return; }
+    const live = liveAgents();
+    if (live.length === 0) { reject(new Error('no relay agent connected')); return; }
+    const ws = live[rr++ % live.length];
     const id = `r${++seq}`;
     const timer = setTimeout(() => {
       pending.delete(id);
@@ -60,7 +71,7 @@ export function relayGet(url: string, extraHeaders: Record<string, string> = {})
     }, REQUEST_TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
     try {
-      agent!.send(JSON.stringify({ id, url, headers: extraHeaders }));
+      ws.send(JSON.stringify({ id, url, headers: extraHeaders }));
     } catch (e: any) {
       clearTimeout(timer);
       pending.delete(id);
@@ -88,12 +99,10 @@ export function attachRelayHub(server: Server): void {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      // Newest agent wins; drop any previous one.
-      if (agent && agent !== ws) { try { agent.terminate(); } catch { /* noop */ } }
-      agent = ws;
-      agentSince = Date.now();
+      agents.add(ws);
+      if (!firstAgentAt) firstAgentAt = Date.now();
       let lastSeen = Date.now();
-      console.log('[RelayHub] agent connected');
+      console.log(`[RelayHub] agent connected (${liveAgents().length} total)`);
 
       ws.on('message', (data) => {
         lastSeen = Date.now();
@@ -117,8 +126,9 @@ export function attachRelayHub(server: Server): void {
 
       const cleanup = () => {
         clearInterval(ka);
-        if (agent === ws) { agent = null; agentSince = 0; }
-        console.log('[RelayHub] agent disconnected');
+        agents.delete(ws);
+        if (agents.size === 0) firstAgentAt = 0;
+        console.log(`[RelayHub] agent disconnected (${liveAgents().length} left)`);
       };
       ws.on('close', cleanup);
       ws.on('error', cleanup);
