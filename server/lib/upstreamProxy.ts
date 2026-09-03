@@ -59,14 +59,23 @@ function hosts(): string[] {
   return hostFilter;
 }
 
-/** Does the proxy apply to this target URL? (host-scope check) */
-export function proxyAppliesTo(targetUrl: string): boolean {
-  if (proxies().length === 0) return false;
+/**
+ * Is this URL in the upstream-proxy host scope? (UPSTREAM_PROXY_HOSTS)
+ * Independent of whether any proxy URL is configured — the reverse relay
+ * uses this too, and it works with UPSTREAM_PROXY_URL empty.
+ */
+export function hostInScope(targetUrl: string): boolean {
   const filter = hosts();
   if (filter.length === 0) return true;
   let host = '';
   try { host = new URL(targetUrl).hostname.toLowerCase(); } catch { return false; }
   return filter.some(h => host === h || host.endsWith('.' + h) || host.includes(h));
+}
+
+/** Does an outbound PROXY apply to this URL? (needs a proxy configured + in scope) */
+export function proxyAppliesTo(targetUrl: string): boolean {
+  if (proxies().length === 0) return false;
+  return hostInScope(targetUrl);
 }
 
 /**

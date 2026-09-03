@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
 import crypto from 'crypto';
-import { proxyCandidates, proxyAppliesTo } from './lib/upstreamProxy';
+import { proxyCandidates, hostInScope } from './lib/upstreamProxy';
 import { attachRelayHub, relayGet, hasRelayAgent, relayStatus } from './lib/relayHub';
 
 // Routes
@@ -190,7 +190,7 @@ app.get('/api/proxy', async (req, res) => {
 
   // ── Relay fast-path: small `.m3u8` manifests for a proxy-scoped host go to
   // the residential agent (dodges the datacenter 403) when one is connected.
-  if (isManifestUrl(targetUrl) && proxyAppliesTo(targetUrl) && hasRelayAgent()) {
+  if (isManifestUrl(targetUrl) && hostInScope(targetUrl) && hasRelayAgent()) {
     try {
       const r = await relayGet(targetUrl, {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
