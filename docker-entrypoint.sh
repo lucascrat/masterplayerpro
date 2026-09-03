@@ -4,7 +4,7 @@ set -e
 echo "[entrypoint] Syncing database schema (prisma db push)..."
 # Retry a few times in case the DB container is still coming up.
 n=0
-until npx prisma db push --skip-generate --accept-data-loss; do
+until npx prisma db push --accept-data-loss; do
   n=$((n + 1))
   if [ "$n" -ge 10 ]; then
     echo "[entrypoint] prisma db push failed after $n attempts — starting anyway."
