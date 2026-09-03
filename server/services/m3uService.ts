@@ -414,6 +414,24 @@ export function getPlaylistForUser(user: string, pass: string, serverOrigin: str
 }
 
 /**
+ * When the provider is briefly unreachable from us (e.g. it IP-throttles the
+ * server), we can't do a live credential check. If a configured server was
+ * provisioned with EXACTLY these ref credentials and we hold a cached
+ * playlist for it, the login is almost certainly legitimate — return that
+ * origin so the caller can serve cached content instead of hard-failing.
+ */
+export function findCachedServerByRefCreds(user: string, pass: string): string | null {
+  const u = user.trim().toLowerCase();
+  for (const [origin, entry] of servers) {
+    if (!entry.data) continue;
+    if (entry.config.username.trim().toLowerCase() === u && entry.config.password === pass) {
+      return origin;
+    }
+  }
+  return null;
+}
+
+/**
  * Try to get playlist for user from ANY cached server.
  * Returns { playlist, playlistName, origin } or null.
  */

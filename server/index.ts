@@ -16,7 +16,7 @@ import adminRoutes from './routes/adminRoutes';
 import rewardsRoutes from './routes/rewardsRoutes';
 import favoriteRoutes from './routes/favoriteRoutes';
 import { searchMovie, searchSeries } from './services/tmdbService';
-import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup } from './services/m3uService';
+import { getPlaylist, preloadAllPlaylists, scheduleNightlyRefresh, validateCredentials, getPlaylistForUser, loadPlaylistOnDemand, getServersStatus, testFetchM3U, acquireCredential, renewLease, releaseLease, startLeaseCleanup, findCachedServerByRefCreds } from './services/m3uService';
 import prisma from './db';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -412,7 +412,20 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // 2. Fallback: direct IPTV server validation (legacy/backwards compat)
-    const matchedOrigin = await validateCredentials(username, password);
+    let matchedOrigin = await validateCredentials(username, password);
+
+    // 2b. Resilience: if the live check failed but these are EXACTLY the ref
+    // credentials of a configured server we already hold a cached playlist
+    // for, the provider is just unreachable from us right now (it throttles
+    // our IP). Don't lock the user out — serve the cache.
+    if (!matchedOrigin) {
+      const cachedOrigin = findCachedServerByRefCreds(username, password);
+      if (cachedOrigin) {
+        console.warn(`[Login] Live validation failed for ${username}; serving cached playlist (provider unreachable).`);
+        matchedOrigin = cachedOrigin;
+      }
+    }
+
     if (!matchedOrigin) {
       res.status(401).json({ error: 'Usuário ou senha incorretos' });
       return;
