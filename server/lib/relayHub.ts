@@ -30,7 +30,7 @@ export interface RelayResponse {
 const RELAY_PATH = '/api/relay/agent';
 // Covers: agent fetches from CDN + uploads the body back to us. Segments are
 // a few MB and home upstream is the slow leg, so allow generous headroom.
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 let agent: WebSocket | null = null;
 let agentSince = 0;
@@ -89,14 +89,17 @@ export function attachRelayHub(server: Server): void {
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       // Newest agent wins; drop any previous one.
-      if (agent && agent !== ws) { try { agent.close(); } catch { /* noop */ } }
+      if (agent && agent !== ws) { try { agent.terminate(); } catch { /* noop */ } }
       agent = ws;
       agentSince = Date.now();
+      let lastSeen = Date.now();
       console.log('[RelayHub] agent connected');
 
       ws.on('message', (data) => {
+        lastSeen = Date.now();
         let msg: any;
         try { msg = JSON.parse(data.toString()); } catch { return; }
+        if (msg?.type === 'pong' || msg?.type === 'ping') return; // liveness only
         const p = msg?.id ? pending.get(msg.id) : undefined;
         if (!p) return;
         pending.delete(msg.id);
@@ -113,17 +116,26 @@ export function attachRelayHub(server: Server): void {
       });
 
       const cleanup = () => {
+        clearInterval(ka);
         if (agent === ws) { agent = null; agentSince = 0; }
         console.log('[RelayHub] agent disconnected');
       };
       ws.on('close', cleanup);
       ws.on('error', cleanup);
+      ws.on('pong', () => { lastSeen = Date.now(); });
 
-      // keep-alive ping
+      // Application-level keepalive: data frames traverse proxies that drop
+      // WS control frames. Terminate a silent connection so the agent can
+      // reconnect cleanly instead of us sending requests into a dead socket.
       const ka = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.ping();
-        else clearInterval(ka);
-      }, 25_000);
+        if (ws.readyState !== WebSocket.OPEN) { clearInterval(ka); return; }
+        if (Date.now() - lastSeen > 45_000) {
+          console.warn('[RelayHub] agent silent >45s, terminating');
+          try { ws.terminate(); } catch { /* noop */ }
+          return;
+        }
+        try { ws.send(JSON.stringify({ type: 'ping' })); ws.ping(); } catch { /* noop */ }
+      }, 15_000);
     });
   });
 

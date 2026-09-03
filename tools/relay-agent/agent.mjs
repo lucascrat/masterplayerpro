@@ -22,7 +22,7 @@ const FETCH_TIMEOUT_MS = 15_000;
 // Manifests are KB; live .ts segments run a few MB. Cap well above a segment.
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 
-let backoff = 1000;
+let backoff = 500;
 
 function ts() { return new Date().toISOString().slice(11, 19); }
 function log(...a) { console.log(`[${ts()}]`, ...a); }
@@ -33,14 +33,15 @@ function connect() {
   const ws = new WebSocket(url);
 
   ws.addEventListener('open', () => {
-    backoff = 1000;
-    log('connected — waiting for manifest requests');
+    backoff = 500;
+    log('connected — waiting for requests');
   });
 
   ws.addEventListener('message', async (ev) => {
     let req;
     try { req = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString()); }
     catch { return; }
+    if (req && req.type === 'ping') { try { ws.send(JSON.stringify({ type: 'pong' })); } catch {} return; }
     if (!req || !req.id || !req.url) return;
 
     const ac = new AbortController();
@@ -67,9 +68,9 @@ function connect() {
   });
 
   const retry = (why) => {
-    log('disconnected', why ? `(${why})` : '', `— reconnecting in ${Math.round(backoff / 1000)}s`);
+    log('disconnected', why ? `(${why})` : '', `— reconnecting in ${(backoff / 1000).toFixed(1)}s`);
     setTimeout(connect, backoff);
-    backoff = Math.min(backoff * 2, 30_000);
+    backoff = Math.min(Math.round(backoff * 1.6), 5_000);
   };
   ws.addEventListener('close', (e) => retry(`code ${e.code}`));
   ws.addEventListener('error', () => { try { ws.close(); } catch {} });

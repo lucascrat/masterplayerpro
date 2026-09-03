@@ -182,6 +182,13 @@ function rewriteManifest(text: string, finalUrl: string, viaRelay = false): stri
 
 const isManifestUrl = (u: string) => u.split('?')[0].toLowerCase().endsWith('.m3u8');
 
+// Tiny per-URL cache of relayed manifests. Live playlists change every few
+// seconds; a 2s hit rate collapses rapid re-polls, and a slightly stale copy
+// (<6s) is a good bridge across a relay reconnect blip.
+const manifestCache = new Map<string, { body: string; at: number }>();
+const MANIFEST_FRESH_MS = 2_000;
+const MANIFEST_STALE_MS = 6_000;
+
 app.get('/api/proxy', async (req, res) => {
   const targetUrl = String(req.query['url'] || '');
 
@@ -198,9 +205,21 @@ app.get('/api/proxy', async (req, res) => {
   // was tagged &relay=1 by a manifest we already fetched via the relay (its
   // segments live on CDN hosts that also block the datacenter).
   const forceRelay = req.query['relay'] === '1';
+  const manifestReq = isManifestUrl(targetUrl);
   const relayEligible = hasRelayAgent() &&
-    (forceRelay || (isManifestUrl(targetUrl) && hostInScope(targetUrl)));
+    (forceRelay || (manifestReq && hostInScope(targetUrl)));
   if (relayEligible) {
+    // Serve a very-fresh cached manifest without bothering the agent.
+    if (manifestReq) {
+      const c = manifestCache.get(targetUrl);
+      if (c && Date.now() - c.at < MANIFEST_FRESH_MS) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.send(c.body);
+        return;
+      }
+    }
     try {
       const r = await relayGet(targetUrl, {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -209,11 +228,13 @@ app.get('/api/proxy', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         const ct = String(r.headers['content-type'] || '').toLowerCase();
-        const asManifest = isManifestUrl(targetUrl) || ct.includes('mpegurl');
+        const asManifest = manifestReq || ct.includes('mpegurl');
         if (asManifest) {
           const finalUrl = r.headers['x-final-url'] || targetUrl;
+          const body = rewriteManifest(r.body.toString('utf-8'), finalUrl, true);
+          manifestCache.set(targetUrl, { body, at: Date.now() });
           res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-          res.send(rewriteManifest(r.body.toString('utf-8'), finalUrl, true));
+          res.send(body);
         } else {
           res.setHeader('Content-Type', r.headers['content-type'] || 'video/mp2t');
           res.send(r.body);
@@ -223,6 +244,17 @@ app.get('/api/proxy', async (req, res) => {
       console.warn(`[Proxy] relay returned ${r.status} for ${targetUrl.split('?')[0]}, falling back`);
     } catch (e: any) {
       console.warn(`[Proxy] relay failed (${e.message}), falling back to direct/proxy`);
+    }
+    // Relay hiccup: a slightly stale manifest keeps playback alive.
+    if (manifestReq) {
+      const c = manifestCache.get(targetUrl);
+      if (c && Date.now() - c.at < MANIFEST_STALE_MS) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.send(c.body);
+        return;
+      }
     }
   }
 
