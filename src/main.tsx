@@ -35,6 +35,19 @@ const updateSW = registerSW({
   },
 });
 
+// A new service worker activating means the JS on this page is stale. Reload
+// once so the user lands on the new build instead of having to clear the site
+// data by hand. Guarded so the reload can only happen a single time.
+if ('serviceWorker' in navigator) {
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    console.log('[PWA] new build active — reloading');
+    window.location.reload();
+  });
+}
+
 // NOTE: no <StrictMode> — its dev-mode double-invoke of effects makes the
 // video player open TWO upstream connections per play, which trips the
 // IPTV provider's simultaneous-connection limit and stalls playback.
