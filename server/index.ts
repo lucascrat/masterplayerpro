@@ -8,7 +8,8 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
 import crypto from 'crypto';
-import { proxyCandidates } from './lib/upstreamProxy';
+import { proxyCandidates, proxyAppliesTo } from './lib/upstreamProxy';
+import { attachRelayHub, relayGet, hasRelayAgent, relayStatus } from './lib/relayHub';
 
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
@@ -151,6 +152,32 @@ app.use('/api/favorites', favoriteRoutes);
 // This proxy fetches the stream server-side (no mixed content) and pipes
 // it back to the client over our HTTPS connection.
 // For HLS manifests (.m3u8) it rewrites internal URLs to also go through proxy.
+
+/** Rewrite every segment / sub-playlist URL in an HLS manifest through /api/proxy. */
+function rewriteManifest(text: string, finalUrl: string): string {
+  const finalParsed = new URL(finalUrl);
+  const finalOrigin = finalParsed.origin;
+  const finalDir    = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);
+  return text.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    if (trimmed.startsWith('#')) {
+      return line.replace(/URI=["']([^"']+)["']/g, (_m, p1) => {
+        let abs = p1;
+        if (!p1.startsWith('http')) abs = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
+        return `URI="/api/proxy?url=${encodeURIComponent(abs)}"`;
+      });
+    }
+    let fullUrl: string;
+    if (trimmed.startsWith('http')) fullUrl = trimmed;
+    else if (trimmed.startsWith('/')) fullUrl = finalOrigin + trimmed;
+    else fullUrl = finalDir + trimmed;
+    return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
+  }).join('\n');
+}
+
+const isManifestUrl = (u: string) => u.split('?')[0].toLowerCase().endsWith('.m3u8');
+
 app.get('/api/proxy', async (req, res) => {
   const targetUrl = String(req.query['url'] || '');
 
@@ -160,6 +187,27 @@ app.get('/api/proxy', async (req, res) => {
   }
 
   // console.log(`[Proxy] Request: ${targetUrl}`);
+
+  // ── Relay fast-path: small `.m3u8` manifests for a proxy-scoped host go to
+  // the residential agent (dodges the datacenter 403) when one is connected.
+  if (isManifestUrl(targetUrl) && proxyAppliesTo(targetUrl) && hasRelayAgent()) {
+    try {
+      const r = await relayGet(targetUrl, {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      });
+      if (r.status >= 200 && r.status < 300 && r.body.length) {
+        const finalUrl = r.headers['x-final-url'] || targetUrl;
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.send(rewriteManifest(r.body.toString('utf-8'), finalUrl));
+        return;
+      }
+      console.warn(`[Proxy] relay returned ${r.status} for ${targetUrl.split('?')[0]}, falling back`);
+    } catch (e: any) {
+      console.warn(`[Proxy] relay failed (${e.message}), falling back to direct/proxy`);
+    }
+  }
 
   try {
     const rangeHeader = req.headers['range'];
@@ -225,41 +273,9 @@ app.get('/api/proxy', async (req, res) => {
           res.status(502).send('Upstream returned empty manifest');
           return;
         }
-
-        const finalUrl: string = (upstream.request as any)?.res?.responseUrl || targetUrl;
-        const finalParsed  = new URL(finalUrl);
-        const finalOrigin  = finalParsed.origin;
-        const finalDir     = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);
-
-        const rewritten = text.split('\n').map(line => {
-          const trimmed = line.trim();
-          if (!trimmed) return line;
-          
-          if (trimmed.startsWith('#')) {
-            // Rewrite URI="..." in any tag
-            return line.replace(/URI=["']([^"']+)["']/g, (match, p1) => {
-              let absoluteUri = p1;
-              if (!p1.startsWith('http')) {
-                 absoluteUri = p1.startsWith('/') ? finalOrigin + p1 : finalDir + p1;
-              }
-              return `URI="/api/proxy?url=${encodeURIComponent(absoluteUri)}"`;
-            });
-          }
-
-          // Rewrite stream/segment URLs
-          let fullUrl: string;
-          if (trimmed.startsWith('http')) {
-            fullUrl = trimmed;
-          } else if (trimmed.startsWith('/')) {
-            fullUrl = finalOrigin + trimmed;
-          } else {
-            fullUrl = finalDir + trimmed;
-          }
-          return `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
-        }).join('\n');
-
+        const finalUrl: string = (upstream!.request as any)?.res?.responseUrl || targetUrl;
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.send(rewritten);
+        res.send(rewriteManifest(text, finalUrl));
       });
     } else {
       res.setHeader('Content-Type', contentType || 'video/mp2t');
@@ -574,6 +590,11 @@ app.get('/api/debug/servers', (_req, res) => {
   res.json(getServersStatus());
 });
 
+// Debug: is the residential relay agent connected?
+app.get('/api/debug/relay', (_req, res) => {
+  res.json(relayStatus());
+});
+
 // Debug: test fetch a specific playlist URL
 app.get('/api/debug/test-fetch', async (req, res) => {
   const url = String(req.query['url'] || '');
@@ -643,7 +664,7 @@ app.get('/{*path}', (_req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
-app.listen(Number(PORT), '0.0.0.0', () => {
+const httpServer = app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 Krator+ Server running on port ${PORT} (0.0.0.0)`);
 
   // Preload all playlists into memory so first login is instant
@@ -655,3 +676,7 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   // Start credential lease cleanup (every 60s, removes leases inactive > 5min)
   startLeaseCleanup();
 });
+
+// Reverse relay hub — a residential agent can dial in over WebSocket to fetch
+// blocked manifest URLs on the server's behalf.
+attachRelayHub(httpServer);
