@@ -4,12 +4,15 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Coolify injects NODE_ENV=production as a build arg; force dev tooling
+# (vite, tsx, prisma CLI, typescript) to install anyway.
+ENV NODE_ENV=development
 # DATABASE_URL is referenced by prisma.config.ts at generate time; a dummy
 # value is enough because `prisma generate` never opens a connection.
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --include=dev
 
 COPY . .
 RUN npx prisma generate

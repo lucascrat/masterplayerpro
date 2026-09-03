@@ -1,5 +1,4 @@
 import pg from 'pg';
-// @ts-expect-error - PrismaClient is generated at build time by `prisma generate`
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
