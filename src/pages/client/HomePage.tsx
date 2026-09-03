@@ -9,17 +9,16 @@ interface HomePageProps {
   onNavigate: (page: Page) => void;
 }
 
-export default function HomePage({ clock, mac, playlistName, onNavigate }: HomePageProps) {
-  const menuItems = [
-    { label: 'TV ao Vivo', icon: '📺', page: 'livetv' as Page },
-    { label: 'Filmes', icon: '🎬', page: 'movies' as Page },
-    { label: 'Séries', icon: '🎭', page: 'series' as Page },
-    { label: 'Favoritos', icon: '❤️', page: 'favorites' as Page },
-    { label: 'Replay', icon: '⏪', page: 'home' as Page },
-    { label: 'Buscar', icon: '🔍', page: 'search' as Page },
-    { label: 'Configurações', icon: '⚙️', page: 'settings' as Page },
-  ];
+const menuItems: { label: string; icon: string; page: Page }[] = [
+  { label: 'TV ao Vivo', icon: '📺', page: 'livetv' },
+  { label: 'Filmes', icon: '🎬', page: 'movies' },
+  { label: 'Séries', icon: '🎭', page: 'series' },
+  { label: 'Favoritos', icon: '❤️', page: 'favorites' },
+  { label: 'Buscar', icon: '🔍', page: 'search' },
+  { label: 'Configurações', icon: '⚙️', page: 'settings' },
+];
 
+export default function HomePage({ clock, mac, playlistName, onNavigate }: HomePageProps) {
   return (
     <div className="home-screen">
       <div className="top-bar">
@@ -37,7 +36,14 @@ export default function HomePage({ clock, mac, playlistName, onNavigate }: HomeP
 
       <div className="menu-grid">
         {menuItems.map(item => (
-          <div key={item.label} className="menu-item" onClick={() => onNavigate(item.page)}>
+          <div
+            key={item.label}
+            className="menu-item"
+            role="button"
+            tabIndex={0}
+            onClick={() => onNavigate(item.page)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(item.page); } }}
+          >
             <div className="menu-icon">
               <span>{item.icon}</span>
             </div>
@@ -47,7 +53,7 @@ export default function HomePage({ clock, mac, playlistName, onNavigate }: HomeP
       </div>
 
       <div style={{ position: 'absolute', bottom: '1.5rem', color: '#444', fontSize: '0.75rem' }}>
-        {mac} | Krator+ v1.3-debug
+        {mac} · Krator+
       </div>
 
       <InstallBanner />

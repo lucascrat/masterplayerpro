@@ -15,6 +15,7 @@ const SettingsPage = lazy(() => import('./pages/client/SettingsPage'));
 
 // Components
 import RewardSessionBadge from './components/RewardSessionBadge';
+import { ToastHost, toast } from './components/Toast';
 
 // hls.js is ~150 KB gzipped — only pull it in once the user actually plays something.
 const HlsPlayer = lazy(() => import('./components/HlsPlayer'));
@@ -66,7 +67,7 @@ export default function App() {
       console.log('--- PLAYLIST DEFINIDA NO ESTADO COM SUCESSO ---');
     } catch (err: any) {
       console.error('ERRO NO CARREGAMENTO:', err);
-      alert('ERRO DE LISTA: ' + (err.message || 'Erro desconhecido ao processar M3U'));
+      toast(err.message || 'Erro desconhecido ao processar a lista M3U.', 'error', 7000);
     } finally {
       setPlaylistLoading(false);
     }
@@ -319,7 +320,7 @@ export default function App() {
       }
       fetchFavorites();
     } catch (err) {
-      alert('Erro ao atualizar favoritos');
+      toast('Não foi possível atualizar os favoritos.', 'error');
     }
   };
 
@@ -401,7 +402,10 @@ export default function App() {
     const saved = localStorage.getItem(AUTH_KEY);
     if (saved) {
       const stored = JSON.parse(saved);
-      if (stored._playlistUrl) loadPlaylist(stored._playlistUrl);
+      if (stored._playlistUrl) {
+        toast('Atualizando o conteúdo...', 'info');
+        loadPlaylist(stored._playlistUrl);
+      }
     }
   }, [loadPlaylist]);
 
@@ -545,6 +549,8 @@ export default function App() {
       {session?.rewardCode && session.accessUntil && currentPage !== 'login' && (
         <RewardSessionBadge code={session.rewardCode} accessUntil={session.accessUntil} coins={session.coins} />
       )}
+
+      <ToastHost />
     </div>
   );
 }
