@@ -111,17 +111,24 @@ export function stripQuality(name: string): string {
   return name.replace(QUALITY_SUFFIX_RE, '').trim();
 }
 
-/** Numeric rank so we can pick the best variant (higher = better) */
+/**
+ * Numeric rank so we can pick the best DEFAULT variant (higher = better).
+ * Tuned for in-browser playback (hls.js + MSE): plain H.264 ladders are
+ * ranked highest because Chrome/Firefox frequently cannot decode H.265/HEVC,
+ * and 4K IPTV variants are nearly always HEVC + the flakiest source.
+ * H265/4K are still kept in `item.variants` for the manual quality picker.
+ */
 function qualityRank(name: string): number {
   const m = name.match(QUALITY_SUFFIX_RE);
-  if (!m) return 2;
+  if (!m) return 4;
   const q = m[0].toUpperCase();
-  if (q.includes('4K') || q.includes('UHD')) return 6;
-  if (q.includes('FHD') && (q.includes('H265') || q.includes('H.265'))) return 5;
-  if (q.includes('FHD')) return 4;
+  const isH265 = q.includes('H265') || q.includes('H.265');
+  if (isH265) return 1;                              // HEVC — often undecodable in browser
+  if (q.includes('4K') || q.includes('UHD')) return 1; // 4K IPTV ≈ always HEVC
+  if (q.includes('FHD')) return 5;                   // best browser-safe quality
   if (q.includes('HD')) return 3;
-  if (q.includes('SD')) return 1;
-  return 2;
+  if (q.includes('SD')) return 2;
+  return 4;
 }
 
 /** Human-readable quality badge extracted from the name */
