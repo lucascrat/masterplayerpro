@@ -29,20 +29,30 @@ export interface RelayResponse {
 
 const RELAY_PATH = '/api/relay/agent';
 // Covers: agent fetches from CDN + uploads the body back to us. Segments are
-// a few MB and home upstream is the slow leg, so allow generous headroom.
-const REQUEST_TIMEOUT_MS = 15_000;
+// a few MB and home upstream is the slow leg. Kept tight because relayGet
+// retries on a second agent: 2 x 8s still fits inside the player's budget.
+const REQUEST_TIMEOUT_MS = 8_000;
 
-// Multiple agents may connect at once (e.g. the same PC started twice, or a
-// spare box). We keep them ALL and round-robin — fighting over a single slot
-// caused a reconnect storm.
-const agents = new Set<WebSocket>();
+// Multiple agents may connect at once (the same PC started twice, or a spare
+// box). We keep them all, but a socket can go half-open — the window is gone
+// yet readyState is still OPEN — and blind round-robin then drops every other
+// request into a black hole. So each agent carries health, we prefer the
+// healthiest, and a request that times out retries on a different agent.
+interface AgentInfo { ws: WebSocket; lastSeen: number; fails: number; }
+const agents = new Map<WebSocket, AgentInfo>();
 let firstAgentAt = 0;
-let rr = 0;
 const pending = new Map<string, Pending>();
 let seq = 0;
 
-function liveAgents(): WebSocket[] {
-  return [...agents].filter(w => w.readyState === WebSocket.OPEN);
+const DEAD_AFTER_FAILS = 2;
+
+function liveAgents(): AgentInfo[] {
+  return [...agents.values()].filter(a => a.ws.readyState === WebSocket.OPEN);
+}
+
+/** Healthiest first: fewest consecutive failures, then most recently active. */
+function rankedAgents(): AgentInfo[] {
+  return liveAgents().sort((a, b) => a.fails - b.fails || b.lastSeen - a.lastSeen);
 }
 
 export function hasRelayAgent(): boolean {
@@ -50,34 +60,62 @@ export function hasRelayAgent(): boolean {
 }
 
 export function relayStatus() {
+  const live = liveAgents();
   return {
-    connected: hasRelayAgent(),
-    agents: liveAgents().length,
+    connected: live.length > 0,
+    agents: live.length,
+    health: live.map(a => ({ fails: a.fails, idleMs: Date.now() - a.lastSeen })),
     since: firstAgentAt ? new Date(firstAgentAt).toISOString() : null,
     inflight: pending.size,
   };
 }
 
-/** Ask a connected agent to GET `url` and return the full response. */
-export function relayGet(url: string, extraHeaders: Record<string, string> = {}): Promise<RelayResponse> {
+function dropAgent(a: AgentInfo, why: string) {
+  console.warn(`[RelayHub] dropping unhealthy agent (${why})`);
+  agents.delete(a.ws);
+  try { a.ws.terminate(); } catch { /* noop */ }
+}
+
+/** Send one request to a specific agent. */
+function sendTo(a: AgentInfo, url: string, extraHeaders: Record<string, string>): Promise<RelayResponse> {
   return new Promise((resolve, reject) => {
-    const live = liveAgents();
-    if (live.length === 0) { reject(new Error('no relay agent connected')); return; }
-    const ws = live[rr++ % live.length];
     const id = `r${++seq}`;
     const timer = setTimeout(() => {
       pending.delete(id);
+      a.fails++;
+      if (a.fails >= DEAD_AFTER_FAILS) dropAgent(a, `${a.fails} timeouts`);
       reject(new Error('relay timeout'));
     }, REQUEST_TIMEOUT_MS);
-    pending.set(id, { resolve, reject, timer });
+    pending.set(id, {
+      resolve: (v) => { a.fails = 0; resolve(v); },
+      reject,
+      timer,
+    });
     try {
-      ws.send(JSON.stringify({ id, url, headers: extraHeaders }));
+      a.ws.send(JSON.stringify({ id, url, headers: extraHeaders }));
     } catch (e: any) {
       clearTimeout(timer);
       pending.delete(id);
+      dropAgent(a, 'send failed');
       reject(new Error('relay send failed: ' + e.message));
     }
   });
+}
+
+/** Ask a connected agent to GET `url`; retries once on a different agent. */
+export async function relayGet(url: string, extraHeaders: Record<string, string> = {}): Promise<RelayResponse> {
+  const ranked = rankedAgents();
+  if (ranked.length === 0) throw new Error('no relay agent connected');
+  let lastErr: any;
+  // Try the healthiest, then one alternate — enough to route around a zombie.
+  for (const a of ranked.slice(0, 2)) {
+    try {
+      return await sendTo(a, url, extraHeaders);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 
 export function attachRelayHub(server: Server): void {
@@ -99,13 +137,13 @@ export function attachRelayHub(server: Server): void {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      agents.add(ws);
+      const info: AgentInfo = { ws, lastSeen: Date.now(), fails: 0 };
+      agents.set(ws, info);
       if (!firstAgentAt) firstAgentAt = Date.now();
-      let lastSeen = Date.now();
       console.log(`[RelayHub] agent connected (${liveAgents().length} total)`);
 
       ws.on('message', (data) => {
-        lastSeen = Date.now();
+        info.lastSeen = Date.now();
         let msg: any;
         try { msg = JSON.parse(data.toString()); } catch { return; }
         if (msg?.type === 'pong' || msg?.type === 'ping') return; // liveness only
@@ -132,20 +170,21 @@ export function attachRelayHub(server: Server): void {
       };
       ws.on('close', cleanup);
       ws.on('error', cleanup);
-      ws.on('pong', () => { lastSeen = Date.now(); });
+      ws.on('pong', () => { info.lastSeen = Date.now(); });
 
       // Application-level keepalive: data frames traverse proxies that drop
-      // WS control frames. Terminate a silent connection so the agent can
-      // reconnect cleanly instead of us sending requests into a dead socket.
+      // WS control frames. A socket that stops answering is half-open — cut it
+      // fast so requests aren't routed into a black hole.
       const ka = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) { clearInterval(ka); return; }
-        if (Date.now() - lastSeen > 45_000) {
-          console.warn('[RelayHub] agent silent >45s, terminating');
+        if (Date.now() - info.lastSeen > 25_000) {
+          console.warn('[RelayHub] agent silent >25s, terminating');
+          agents.delete(ws);
           try { ws.terminate(); } catch { /* noop */ }
           return;
         }
         try { ws.send(JSON.stringify({ type: 'ping' })); ws.ping(); } catch { /* noop */ }
-      }, 15_000);
+      }, 8_000);
     });
   });
 
