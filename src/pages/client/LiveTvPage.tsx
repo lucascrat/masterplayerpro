@@ -60,12 +60,21 @@ function getShortQuality(quality: string = ''): string {
 // ── Quality picker sheet ─────────────────────────────────────────────────────
 interface QualityPickerProps {
   item: M3UItem;
-  onPlay: (url: string) => void;
+  onPlay: (url: string, item?: M3UItem) => void;
   onClose: () => void;
 }
 
 function QualityPicker({ item, onPlay, onClose }: QualityPickerProps) {
   const variants = item.variants ?? [item];
+
+  // Pick a variant: hand the player the chosen URL PLUS the remaining
+  // variants (chosen first) so it can auto-fall-back if this one is dead.
+  const pick = (v: M3UItem) => {
+    const ordered = [v, ...variants.filter(x => x.url !== v.url)];
+    onClose();
+    onPlay(v.url, { ...v, variants: ordered });
+  };
+
   return (
     <div className="quality-picker-overlay" onClick={onClose}>
       <div className="quality-picker-sheet" onClick={e => e.stopPropagation()}>
@@ -81,15 +90,15 @@ function QualityPicker({ item, onPlay, onClose }: QualityPickerProps) {
         </div>
         <div className="quality-picker-options">
           {variants.map((v, i) => {
-            const q = getShortQuality(v.quality ?? '');
+            const q = getShortQuality(v.quality || v.name);
             return (
               <button
                 key={i}
                 className="quality-option"
-                onClick={() => { onClose(); onPlay(v.url); }}
+                onClick={() => pick(v)}
               >
                 {q && (
-                  <span className="quality-badge" style={{ background: getQualityColor(v.quality ?? '') }}>
+                  <span className="quality-badge" style={{ background: getQualityColor(v.quality || v.name) }}>
                     {q}
                   </span>
                 )}

@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import crypto from 'crypto';
+import { upstreamProxy } from './lib/upstreamProxy';
 
 // Routes
 import deviceRoutes from './routes/deviceRoutes';
@@ -174,6 +175,7 @@ app.get('/api/proxy', async (req, res) => {
       timeout: 20000,       // 20s timeout
       maxRedirects: 10,
       headers: upstreamHeaders,
+      proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
       validateStatus: (status) => status >= 200 && status < 400,
     });
 
@@ -273,6 +275,7 @@ app.get('/api/m3u', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
       },
+      proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
       validateStatus: (s) => s >= 200 && s < 400,
     });
 

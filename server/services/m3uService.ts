@@ -1,5 +1,6 @@
 ﻿import axios from 'axios';
 import prisma from '../db';
+import { upstreamProxy } from '../lib/upstreamProxy';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface M3UItem {
@@ -158,6 +159,7 @@ export async function parseM3U(url: string): Promise<PlaylistData> {
     responseType: 'stream',   // Stream instead of loading all to memory
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
+    proxy: upstreamProxy(),   // optional residential proxy (UPSTREAM_PROXY_URL)
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     },
@@ -346,6 +348,7 @@ async function validateAgainstServer(config: RefConfig, user: string, pass: stri
       timeout: 15000,
       responseType: 'stream',
       maxRedirects: 5,
+      proxy: upstreamProxy(),
       validateStatus: () => true,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -519,6 +522,7 @@ export async function testFetchM3U(url: string): Promise<{ status: number; conte
     timeout: 30000,
     responseType: 'text',
     maxContentLength: 100 * 1024 * 1024,
+    proxy: upstreamProxy(),
     validateStatus: () => true,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
