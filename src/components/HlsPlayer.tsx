@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { getResumePosition, saveProgress } from '../lib/watchProgress';
 import { toast } from './Toast';
@@ -19,16 +19,45 @@ interface HlsPlayerProps {
   onClose: () => void;
 }
 
-// Chrome 86+ blocks ALL HTTP media (video, audio) from HTTPS pages —
-// even native <video> elements. The only fix is to route every HTTP
-// stream through our own HTTPS proxy endpoint.
-// ALL http:// URLs must go through /api/proxy so the browser only
-// sees HTTPS and mixed-content blocking never triggers.
-function getEffectiveUrl(url: string): string {
-  if (url.startsWith('http://')) {
-    return `/api/proxy?url=${encodeURIComponent(url)}`;
+// ── Stream delivery strategy ────────────────────────────────────────────────
+// A page served over HTTPS cannot load http:// media (mixed content), so an
+// http:// stream can't be played by the browser as-is. Two ways to deliver it:
+//
+//   'direct' — rewrite http:// → https:// and let the BROWSER fetch it.
+//              Streams over the VIEWER'S OWN IP, zero server load, and dodges
+//              the provider's per-IP rate-limit. Works when the provider
+//              serves valid HTTPS; for hls.js (Android/desktop) it also needs
+//              the provider to send CORS headers. iOS native HLS needs neither.
+//
+//   'proxy'  — route through our /api/proxy (server's IP, always works, but
+//              all traffic exits one IP and the provider throttles it).
+//
+// We try 'direct' first, then fall back to 'proxy'. Already-https URLs are
+// tried direct first too; a plain relative/blob URL is passed straight through.
+
+type DeliveryMode = 'direct' | 'proxy';
+interface StreamSource { playUrl: string; mode: DeliveryMode; originalUrl: string; }
+
+function proxied(u: string): string {
+  return `/api/proxy?url=${encodeURIComponent(u)}`;
+}
+
+/** Build the ordered list of (deliveryMode × url) attempts for one logical stream. */
+function sourcesFor(rawUrl: string): StreamSource[] {
+  if (rawUrl.startsWith('http://')) {
+    const asHttps = 'https://' + rawUrl.slice('http://'.length);
+    return [
+      { playUrl: asHttps, mode: 'direct', originalUrl: rawUrl },
+      { playUrl: proxied(rawUrl), mode: 'proxy', originalUrl: rawUrl },
+    ];
   }
-  return url;
+  if (rawUrl.startsWith('https://')) {
+    return [
+      { playUrl: rawUrl, mode: 'direct', originalUrl: rawUrl },
+      { playUrl: proxied(rawUrl), mode: 'proxy', originalUrl: rawUrl },
+    ];
+  }
+  return [{ playUrl: rawUrl, mode: 'direct', originalUrl: rawUrl }];
 }
 
 export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps) {
@@ -38,27 +67,42 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
   const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
 
-  // Candidate URLs to try, in order. Falls back to just [url] when no variants.
+  // Logical candidate URLs (quality variants). Falls back to just [url].
   const candidates = (fallbackUrls && fallbackUrls.length > 0) ? fallbackUrls : [url];
+
+  // Expand each into [direct, proxy] attempts → one flat ordered chain.
+  const chainKey = candidates.join('|');
+  const sourceChain: StreamSource[] = useMemo(
+    () => candidates.flatMap(sourcesFor),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chainKey],
+  );
 
   const [error,     setError]     = useState<string | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [retry,     setRetry]     = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
 
-  // New item selected upstream → restart from the first candidate.
+  // New item selected upstream → restart from the first source.
   useEffect(() => { setActiveIdx(0); setRetry(0); }, [url]);
 
-  const activeUrl = candidates[Math.min(activeIdx, candidates.length - 1)] || url;
-  const hasNextCandidate = activeIdx < candidates.length - 1;
+  const active = sourceChain[Math.min(activeIdx, sourceChain.length - 1)]
+    ?? { playUrl: url, mode: 'proxy' as DeliveryMode, originalUrl: url };
+  const effectiveUrl = active.playUrl;
+  const hasNextCandidate = activeIdx < sourceChain.length - 1;
 
-  // Improved detection (based on the URL actually being played)
-  const isHls = activeUrl.toLowerCase().includes('.m3u8') || activeUrl.toLowerCase().includes('/hls/');
-  const isMp4 = activeUrl.toLowerCase().includes('.mp4') || activeUrl.toLowerCase().includes('.mkv');
+  // Detection is based on the ORIGINAL url (the proxied form hides the ext in a
+  // query string, but .m3u8/.mp4 substring checks still work either way).
+  const detectUrl = active.originalUrl.toLowerCase();
+  const isHls = detectUrl.includes('.m3u8') || detectUrl.includes('/hls/');
+  const isMp4 = detectUrl.includes('.mp4') || detectUrl.includes('.mkv');
   // Anything that is neither HLS nor MP4 is treated as a raw TS stream and
   // wrapped in a virtual HLS manifest below.
 
-  const effectiveUrl = getEffectiveUrl(activeUrl);
+  // crossOrigin only helps when the response actually carries CORS headers —
+  // that's our own /api/proxy (same-origin). For a direct cross-origin stream
+  // with no CORS headers, setting it would BREAK native <video> playback.
+  const useCors = active.mode === 'proxy';
 
   // ── Fullscreen ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -119,7 +163,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
     // simultaneous connections and the 2nd one stalls both.
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    console.log(`[Player] Iniciando (${activeIdx + 1}/${candidates.length}): ${activeUrl}`);
+    console.log(`[Player] Iniciando (${activeIdx + 1}/${sourceChain.length}) [${active.mode}]: ${effectiveUrl}`);
     console.log(`[Player] Tipo Detectado: ${isHls ? 'HLS' : isMp4 ? 'MP4/Direct' : 'TS/Wrap'}`);
 
     // Virtual HLS manifest wrapper for raw TS streams (computed here so it
@@ -136,17 +180,22 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     };
 
-    // A stream failed (stall/timeout/fatal error). If we still have another
-    // quality variant to try, silently advance to it; otherwise surface the
-    // error screen.
+    // A source failed (stall/timeout/fatal error). If another source remains
+    // (proxy fallback, or next quality variant) advance to it silently;
+    // otherwise surface the error screen.
     let failed = false;
     const failStream = (msg: string) => {
       if (failed) return;
       failed = true;
       clearTO();
       if (hasNextCandidate) {
-        console.log(`[Player] Variante ${activeIdx + 1} falhou — tentando a próxima…`);
-        toast('Tentando outra qualidade…', 'info', 2500);
+        const next = sourceChain[activeIdx + 1];
+        console.log(`[Player] Fonte ${activeIdx + 1} (${active.mode}) falhou — tentando ${next?.mode}…`);
+        // Only nag the user when we actually change quality, not on a
+        // transparent direct→proxy switch of the same stream.
+        if (next && next.originalUrl !== active.originalUrl) {
+          toast('Tentando outra qualidade…', 'info', 2500);
+        }
         setActiveIdx(i => i + 1);
       } else {
         setLoading(false);
@@ -154,10 +203,12 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       }
     };
 
+    // Direct attempts that are going to fail (no CORS / blocked) usually error
+    // fast, but cap the wait shorter so the proxy fallback kicks in quickly.
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       failStream('O servidor demorou muito para responder. Tente o VLC.');
-    }, 20000);
+    }, active.mode === 'direct' ? 13000 : 20000);
 
     // ── Resume where the user left off (VOD only; live streams have no
     //    finite duration so saveProgress simply ignores them) ──────────
@@ -305,7 +356,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
         controls
         playsInline
         autoPlay
-        crossOrigin="anonymous"
+        crossOrigin={useCors ? 'anonymous' : undefined}
         preload="auto"
       />
 
@@ -365,7 +416,7 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
               ← Voltar
             </button>
             <a
-              href={`vlc://${activeUrl}`}
+              href={`vlc://${active.originalUrl}`}
               style={{
                 background: 'rgba(255,255,255,0.1)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.25)',
