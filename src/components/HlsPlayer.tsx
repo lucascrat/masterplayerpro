@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { Capacitor } from '@capacitor/core';
 import { getResumePosition, saveProgress } from '../lib/watchProgress';
 import { toast } from './Toast';
+
+// True only inside the packaged Android/iOS app (Capacitor), never in a
+// regular browser tab — that's the one place we're allowed to disable the
+// browser's mixed-content block (see android/.../MainActivity.java), so only
+// there does a raw http:// URL stand a chance of loading at all.
+const isNativeShell = Capacitor.isNativePlatform();
 
 function fmtTime(sec: number): string {
   const s = Math.floor(sec % 60);
@@ -21,21 +28,31 @@ interface HlsPlayerProps {
 
 // ── Stream delivery strategy ────────────────────────────────────────────────
 // A page served over HTTPS cannot load http:// media (mixed content), so an
-// http:// stream can't be played by the browser as-is. Two ways to deliver it:
+// http:// stream can't be played by a normal browser tab as-is. Ways to
+// deliver it, tried in this order:
 //
-//   'direct' — rewrite http:// → https:// and let the BROWSER fetch it.
-//              Streams over the VIEWER'S OWN IP, zero server load, and dodges
-//              the provider's per-IP rate-limit. Works when the provider
-//              serves valid HTTPS; for hls.js (Android/desktop) it also needs
-//              the provider to send CORS headers. iOS native HLS needs neither.
+//   'native'  — the RAW http:// URL, only inside the packaged app, whose
+//               WebView has mixed-content checking turned off. Streams
+//               straight from the VIEWER'S device — zero server load. Movies
+//               (<video src>, no XHR involved) always work this way once
+//               mixed content is off. Live HLS still needs hls.js to fetch
+//               the manifest/segments via XHR, which is still subject to
+//               CORS — if the provider doesn't send CORS headers this mode
+//               fails fast and we fall through, same as any other source.
 //
-//   'proxy'  — route through our /api/proxy (server's IP, always works, but
-//              all traffic exits one IP and the provider throttles it).
+//   'direct'  — rewrite http:// → https:// and let the BROWSER fetch it.
+//               Works when the provider serves valid HTTPS (this one doesn't
+//               — see server_info.https_port — so it's here for providers
+//               that do); for hls.js it also needs CORS. iOS native HLS
+//               needs neither.
 //
-// We try 'direct' first, then fall back to 'proxy'. Already-https URLs are
-// tried direct first too; a plain relative/blob URL is passed straight through.
+//   'proxy'   — route through our /api/proxy (server's IP, always works, but
+//               all traffic exits one IP and the provider throttles it).
+//
+// Already-https URLs skip 'native' (nothing to unblock) and start at 'direct'.
+// A plain relative/blob URL is passed straight through.
 
-type DeliveryMode = 'direct' | 'proxy';
+type DeliveryMode = 'native' | 'direct' | 'proxy';
 interface StreamSource { playUrl: string; mode: DeliveryMode; originalUrl: string; }
 
 function proxied(u: string): string {
@@ -46,10 +63,13 @@ function proxied(u: string): string {
 function sourcesFor(rawUrl: string): StreamSource[] {
   if (rawUrl.startsWith('http://')) {
     const asHttps = 'https://' + rawUrl.slice('http://'.length);
-    return [
+    const out: StreamSource[] = [];
+    if (isNativeShell) out.push({ playUrl: rawUrl, mode: 'native', originalUrl: rawUrl });
+    out.push(
       { playUrl: asHttps, mode: 'direct', originalUrl: rawUrl },
       { playUrl: proxied(rawUrl), mode: 'proxy', originalUrl: rawUrl },
-    ];
+    );
+    return out;
   }
   if (rawUrl.startsWith('https://')) {
     return [
@@ -66,7 +86,8 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fsEnteredRef = useRef(false);
-  // Set once a 'direct' source fails — the rest will fail identically.
+  // Set once a browser-side ('native' or 'direct') source fails — the rest
+  // of that kind will fail identically, so skip straight to 'proxy'.
   const directHopelessRef = useRef(false);
 
   // Logical candidate URLs (quality variants). Falls back to just [url].
@@ -190,15 +211,16 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       failed = true;
       clearTO();
 
-      // Once a direct attempt has failed, every other direct source will fail
-      // the same way (this provider serves segments from an HTTP-only CDN, so
-      // an HTTPS page can never load them). Skip them instead of burning a
-      // timeout on each.
-      if (active.mode === 'direct') directHopelessRef.current = true;
+      // Once a browser-side attempt (native or direct) has failed for THIS
+      // content type, every other native/direct source will fail the same
+      // way — same host, same missing HTTPS/CORS. Skip straight to 'proxy'
+      // sources instead of burning a timeout on each. (A native MP4 success
+      // never reaches here, so this never short-circuits a working mode.)
+      if (active.mode === 'direct' || active.mode === 'native') directHopelessRef.current = true;
 
       let next = activeIdx + 1;
       if (directHopelessRef.current) {
-        while (next < sourceChain.length && sourceChain[next].mode === 'direct') next++;
+        while (next < sourceChain.length && sourceChain[next].mode !== 'proxy') next++;
       }
 
       if (next < sourceChain.length) {
@@ -216,12 +238,12 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
       }
     };
 
-    // A doomed direct attempt normally errors within a second or two; the cap
-    // is just a backstop. The proxy path gets the real budget.
+    // A doomed native/direct attempt normally errors within a second or two;
+    // the cap is just a backstop. The proxy path gets the real budget.
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       failStream('O servidor demorou muito para responder. Tente o VLC.');
-    }, active.mode === 'direct' ? 8000 : 18000);
+    }, active.mode === 'proxy' ? 18000 : 8000);
 
     // ── Resume where the user left off (VOD only; live streams have no
     //    finite duration so saveProgress simply ignores them) ──────────
