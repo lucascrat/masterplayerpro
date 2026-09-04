@@ -163,4 +163,9 @@ export const admin = {
   createIptvCredential: (c: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) =>
     adminReq<any>('/iptv-credentials', { method: 'POST', body: JSON.stringify(c) }),
   deleteIptvCredential: (id: string) => adminReq<any>(`/iptv-credentials/${id}`, { method: 'DELETE' }),
+  /** Check a credential against the provider without saving it. */
+  testIptvCredential: (c: { username: string; password: string; playlistId: string }) =>
+    adminReq<{ ok: boolean; status: number; detail: string }>('/iptv-credentials/test', {
+      method: 'POST', body: JSON.stringify(c),
+    }),
 };

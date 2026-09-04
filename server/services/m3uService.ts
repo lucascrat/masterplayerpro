@@ -2,6 +2,7 @@
 import { StringDecoder } from 'string_decoder';
 import prisma from '../db';
 import { proxyCandidates } from '../lib/upstreamProxy';
+import { relayGet, hasRelayAgent } from '../lib/relayHub';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface M3UItem {
@@ -304,6 +305,79 @@ function extractConfig(m3uUrl: string): RefConfig | null {
 /**
  * Build the M3U URL for a specific user on a given IPTV server.
  */
+/**
+ * Check that a username/password is a REAL subscriber account on the provider
+ * behind `playlistUrl`.
+ *
+ * This matters because the credential pool only fetches the catalogue once
+ * (with the playlist's reference login) and then rewrites every stream URL
+ * with whichever pooled credential a viewer leases. A bogus entry therefore
+ * fails silently — the catalogue looks perfect and every channel 403s.
+ *
+ * Uses Xtream's player_api.php (a few hundred bytes) rather than get.php
+ * (tens of MB), and goes through the residential relay when one is connected,
+ * since the provider blocks our datacenter IP outright.
+ */
+export async function testCredential(
+  playlistUrl: string, user: string, pass: string,
+): Promise<{ ok: boolean; status: number; detail: string }> {
+  let origin = '';
+  try { origin = new URL(playlistUrl).origin; } catch {
+    return { ok: false, status: 0, detail: 'URL da playlist inválida.' };
+  }
+  const apiUrl = `${origin}/player_api.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`;
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+  let body = '';
+  let status = 0;
+
+  if (hasRelayAgent()) {
+    try {
+      const r = await relayGet(apiUrl, { 'User-Agent': UA });
+      status = r.status;
+      body = r.body.toString('utf-8');
+    } catch { /* fall through to direct */ }
+  }
+  if (!body) {
+    for (const proxy of proxyCandidates(apiUrl)) {
+      try {
+        const res = await axios.get(apiUrl, {
+          timeout: 12000,
+          responseType: 'text',
+          transformResponse: (d) => d,
+          proxy,
+          validateStatus: () => true,
+          headers: { 'User-Agent': UA, 'Accept': '*/*' },
+        });
+        status = res.status;
+        body = typeof res.data === 'string' ? res.data : '';
+        if (status === 200 && body) break;
+      } catch { /* try next candidate */ }
+    }
+  }
+
+  if (status === 403) return { ok: false, status, detail: 'O provedor recusou (403). Confira usuário e senha.' };
+  if (status === 429) return { ok: false, status, detail: 'O provedor está limitando as requisições agora (429). Tente em alguns minutos.' };
+  if (!body) return { ok: false, status, detail: `Sem resposta do provedor (HTTP ${status || 'sem conexão'}).` };
+
+  try {
+    const info = JSON.parse(body)?.user_info;
+    if (!info || String(info.auth) !== '1') {
+      return { ok: false, status, detail: 'Usuário ou senha não conferem no provedor.' };
+    }
+    const state = String(info.status || '').toLowerCase();
+    if (state && state !== 'active') {
+      return { ok: false, status, detail: `Conta encontrada, mas está "${info.status}" no provedor.` };
+    }
+    const conn = info.max_connections ? ` (máx. ${info.max_connections} conexões)` : '';
+    return { ok: true, status, detail: `Conta ativa no provedor${conn}.` };
+  } catch {
+    // Not the Xtream API — accept an M3U body as proof the login works.
+    if (body.trim().startsWith('#EXTM3U')) return { ok: true, status, detail: 'Login aceito pelo provedor.' };
+    return { ok: false, status, detail: 'Resposta inesperada do provedor — credencial provavelmente inválida.' };
+  }
+}
+
 function buildUserM3uUrl(config: RefConfig, user: string, pass: string): string {
   const parsed = new URL(config.url);
   if (parsed.searchParams.has('username')) {

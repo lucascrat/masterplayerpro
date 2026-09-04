@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../db';
-import { preloadAllPlaylists } from '../services/m3uService';
+import { preloadAllPlaylists, testCredential } from '../services/m3uService';
 
 // Extract username/password from M3U URL
 function extractCredentials(url: string): { username: string; password: string } | null {
@@ -254,12 +254,32 @@ export const createIptvCredential = async (req: Request, res: Response) => {
       return;
     }
 
+    // Verify the credential is a real account on the provider before pooling
+    // it. A bogus one fails silently: the catalogue still loads (it's fetched
+    // with the playlist's own login) but every stream URL is rewritten with
+    // this credential and 403s. Pass ?force=1 to save anyway.
+    const force = String(req.query['force'] || '') === '1';
+    const playlist = await prisma.playlist.findUnique({ where: { id: finalPlaylistId } });
+    if (playlist && !force) {
+      const check = await testCredential(playlist.url, username.trim(), password);
+      if (!check.ok) {
+        res.status(400).json({
+          error: `Credencial não validou no provedor: ${check.detail}`,
+          detail: check.detail,
+          status: check.status,
+          canForce: true,
+        });
+        return;
+      }
+      console.log(`[Admin] credential ${username} validated: ${check.detail}`);
+    }
+
     const cred = await prisma.iptvCredential.create({
-      data: { 
-        username: username.trim().toLowerCase(), 
-        password, 
-        playlistId: finalPlaylistId, 
-        maxLeases: maxLeases || 2 
+      data: {
+        username: username.trim().toLowerCase(),
+        password,
+        playlistId: finalPlaylistId,
+        maxLeases: maxLeases || 2
       },
     });
     res.json(cred);
@@ -270,6 +290,19 @@ export const createIptvCredential = async (req: Request, res: Response) => {
     }
     throw err;
   }
+};
+
+/** Check a credential against the provider without saving it. */
+export const checkIptvCredential = async (req: Request, res: Response) => {
+  const { username, password, playlistId } = req.body;
+  if (!username || !password || !playlistId) {
+    res.status(400).json({ error: 'username, password e playlistId são obrigatórios.' });
+    return;
+  }
+  const playlist = await prisma.playlist.findUnique({ where: { id: playlistId } });
+  if (!playlist) { res.status(404).json({ error: 'Playlist não encontrada.' }); return; }
+  const result = await testCredential(playlist.url, String(username).trim(), String(password));
+  res.json(result);
 };
 
 export const deleteIptvCredential = async (req: Request, res: Response) => {

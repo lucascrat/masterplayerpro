@@ -25,6 +25,7 @@ router.delete('/app-users/:id', adminController.deleteAppUser);
 
 router.get('/iptv-credentials', adminController.getIptvCredentials);
 router.post('/iptv-credentials', adminController.createIptvCredential);
+router.post('/iptv-credentials/test', adminController.checkIptvCredential);
 router.delete('/iptv-credentials/:id', adminController.deleteIptvCredential);
 
 export default router;
