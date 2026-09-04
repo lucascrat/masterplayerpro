@@ -4,6 +4,7 @@ import { ApiError } from './lib/api';
 import { useClock } from './hooks/useClock';
 import type { PlaylistData, Page, AuthSession, Favorite, M3UItem } from './types';
 import { generateMAC, qualityRank as variantPlayScore } from './utils';
+import { resolveDirectUrl, resolveDirectUrls } from './lib/resolveStream';
 
 // Pages — login lands eagerly; the rest are split per route.
 import LoginScreen from './pages/client/LoginScreen';
@@ -43,6 +44,10 @@ export default function App() {
   // Ordered fallback URLs (quality variants) for the currently-playing item —
   // the player auto-advances through these if a stream stalls or errors.
   const [playingFallbacks, setPlayingFallbacks] = useState<string[]>([]);
+  // True only for the brief window between tapping "play" and the direct-link
+  // resolve finishing — gives instant visual feedback since playingUrl itself
+  // isn't set until resolution lands (avoids mounting the player twice).
+  const [resolvingPlay, setResolvingPlay] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
@@ -248,16 +253,28 @@ export default function App() {
   // list if a stream stalls.
   const handlePlay = useCallback((url: string, item?: M3UItem) => {
     const variants = item?.variants ?? [];
+    // Resolve http:// links to their final CDN url first (a quick redirect
+    // check, capped at 4s — see resolveStream.ts) so the player mounts once,
+    // directly on the best url, instead of starting on the raw link and
+    // restarting a moment later when the resolved one comes back.
+    setResolvingPlay(true);
     if (variants.length > 1) {
       const ordered = [...variants].sort((a, b) => variantPlayScore(b.name) - variantPlayScore(a.name));
       const urls = ordered.map(v => v.url);
-      // Make sure the explicitly-requested url is tried first.
-      const rest = urls.filter(u => u !== url);
-      setPlayingFallbacks([url, ...rest]);
+      const rest = urls.filter(u => u !== url); // requested url tried first
+      const list = [url, ...rest];
+      resolveDirectUrls(list).then(resolved => {
+        setPlayingFallbacks(resolved);
+        setPlayingUrl(resolved[0]);
+        setResolvingPlay(false);
+      });
     } else {
       setPlayingFallbacks([]);
+      resolveDirectUrl(url).then(resolved => {
+        setPlayingUrl(resolved);
+        setResolvingPlay(false);
+      });
     }
-    setPlayingUrl(url);
   }, []);
 
   // When the user stops watching, tell the server immediately (faster release)
@@ -390,6 +407,12 @@ export default function App() {
         />
       )}
       </Suspense>
+
+      {resolvingPlay && !playingUrl && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="spinner" />
+        </div>
+      )}
 
       {playingUrl && (
         <Suspense fallback={

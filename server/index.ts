@@ -412,6 +412,66 @@ app.get('/api/proxy', async (req, res) => {
   }
 });
 
+// ── Direct-link resolver ─────────────────────────────────────────────────────
+// Some IPTV panels (Xtream-style /movie//live/ links) are themselves just a
+// 302 redirect to the real CDN — the redirect response is a few bytes, the
+// heavy payload lives one hop further. Following that hop server-side (tiny
+// request, no video bytes) and handing the CLIENT the final URL lets VOD/live
+// play straight from the provider's own CDN with zero bandwidth through us —
+// but ONLY when that final URL is https:// (otherwise the browser's mixed-
+// content block still applies, and the caller should fall back to /api/proxy).
+app.get('/api/resolve', async (req, res) => {
+  const targetUrl = String(req.query['url'] || '');
+  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
+    res.status(400).json({ error: 'Missing or invalid url parameter' });
+    return;
+  }
+
+  try {
+    let resolved = targetUrl;
+    let hops = 0;
+    // Follow redirects ourselves (maxRedirects: 0) instead of letting axios do
+    // it, so we can hand back the FINAL url without ever touching the body.
+    while (hops < 5) {
+      let upstream: AxiosResponse | undefined;
+      let lastErr: any;
+      for (const proxy of proxyCandidates(resolved)) {
+        try {
+          upstream = await axios.get(resolved, {
+            timeout: 8000,
+            maxRedirects: 0,
+            responseType: 'stream',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+            },
+            proxy,
+            validateStatus: (s) => (s >= 200 && s < 400),
+          });
+          break;
+        } catch (e: any) { lastErr = e; }
+      }
+      if (!upstream) throw lastErr;
+      upstream.data.destroy(); // never read the body — redirect or not, we don't need it
+
+      const status = upstream.status;
+      const location = upstream.headers['location'];
+      if (status >= 300 && status < 400 && location) {
+        resolved = new URL(location, resolved).toString();
+        hops++;
+        continue;
+      }
+      break; // 200 (or anything non-redirect) — this IS the final url
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ resolvedUrl: resolved, secure: resolved.startsWith('https://') });
+  } catch (err: any) {
+    console.error(`[Resolve Error] ${targetUrl.split('?')[0]} -> ${err.message}`);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ── M3U text proxy ───────────────────────────────────────────────────────────
 // Fetches a playlist M3U server-side and returns the RAW text untouched (no URL
 // rewriting, unlike /api/proxy). The client uses this as its first, most
@@ -763,6 +823,72 @@ app.get('/api/debug/playlist', async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: String(err.message) });
   }
+});
+
+// Public runtime config the client reads once on boot. `httpWatchOrigin` is
+// only set once a plain-HTTP-only domain (no TLS, no forced https redirect)
+// is pointed at this same app in Coolify — see docs/http-watch-domain.md.
+// Kept server-side (env var) instead of a build-time Vite var so turning the
+// feature on/off never needs a client rebuild, just a Coolify redeploy.
+app.get('/api/config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ httpWatchOrigin: process.env.HTTP_WATCH_ORIGIN || null });
+});
+
+// ── Standalone plain-HTTP watch page ─────────────────────────────────────────
+// Exists ONLY to be reached through the http-only domain (HTTP_WATCH_ORIGIN).
+// Because that page is itself http://, not https://, an http:// video source
+// loaded inside it is NOT mixed content — the browser's block only fires when
+// an https:// page pulls in http:// media. This is the one way to play a
+// TLS-less live CDN straight from the viewer's device with zero VPS bandwidth
+// in a normal browser tab (the main app can't do this itself — it's https).
+app.get('/watch', (req, res) => {
+  const url = String(req.query['url'] || '');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  if (!url || !/^https?:\/\//i.test(url)) {
+    res.status(400).send('<!doctype html><meta charset="utf-8"><body style="background:#111;color:#f66;font-family:sans-serif;padding:2rem">Link inválido.</body>');
+    return;
+  }
+  const safeUrl = url.replace(/</g, '%3C').replace(/>/g, '%3E');
+  res.send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krator+ — assistindo</title>
+<style>
+  html,body{margin:0;height:100%;background:#000}
+  video{width:100%;height:100%;object-fit:contain;display:block}
+  #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+       color:#ccc;font:14px system-ui,sans-serif;text-align:center;padding:24px;pointer-events:none}
+</style></head>
+<body>
+  <video id="v" controls autoplay playsInline></video>
+  <div id="msg">Carregando…</div>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+  <script>
+    var url = "${safeUrl}";
+    var video = document.getElementById('v');
+    var msg = document.getElementById('msg');
+    function hide() { msg.style.display = 'none'; }
+    function fail(t) { msg.textContent = t; }
+    if (url.indexOf('.mp4') !== -1 || url.indexOf('.mkv') !== -1) {
+      video.src = url;
+      video.addEventListener('loadeddata', hide);
+      video.addEventListener('error', function () { fail('Não foi possível abrir este link.'); });
+    } else if (window.Hls && Hls.isSupported()) {
+      var hls = new Hls();
+      hls.on(Hls.Events.MANIFEST_PARSED, hide);
+      hls.on(Hls.Events.ERROR, function (_e, data) {
+        if (data.fatal) fail('Falha ao carregar o canal (' + data.details + ').');
+      });
+      hls.loadSource(url);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url; // Safari/iOS native HLS
+      video.addEventListener('loadedmetadata', hide);
+    } else {
+      fail('Navegador incompatível.');
+    }
+  </script>
+</body></html>`);
 });
 
 // Serve static files from the React app build

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { Capacitor } from '@capacitor/core';
 import { getResumePosition, saveProgress } from '../lib/watchProgress';
+import { getRuntimeConfig } from '../lib/config';
 import { toast } from './Toast';
 
 // True only inside the packaged Android/iOS app (Capacitor), never in a
@@ -105,6 +106,13 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
   const [loading,   setLoading]   = useState(true);
   const [retry,     setRetry]     = useState(0);
   const [activeIdx, setActiveIdx] = useState(0);
+  // Populated only when ops configured a plain-HTTP-only domain (see
+  // GET /api/config, docs/http-watch-domain.md). Lets us offer an escape
+  // hatch for http:// sources whose CDN has no TLS (typically live TV) —
+  // one that plays straight off the viewer's device with zero VPS bandwidth,
+  // unlike the proxy fallback this component otherwise lands on.
+  const [httpWatchOrigin, setHttpWatchOrigin] = useState<string | null>(null);
+  useEffect(() => { getRuntimeConfig().then(c => setHttpWatchOrigin(c.httpWatchOrigin)); }, []);
 
   // New item selected upstream → restart from the first source.
   useEffect(() => { setActiveIdx(0); setRetry(0); directHopelessRef.current = false; }, [url]);
@@ -489,6 +497,25 @@ export default function HlsPlayer({ url, fallbackUrls, onClose }: HlsPlayerProps
             >
               Abrir no VLC
             </a>
+            {/* Only makes sense in a normal browser tab (native app streams
+                the raw url directly already) for an http:// source, and only
+                once ops has an HTTP-only domain configured for it. */}
+            {!isNativeShell && httpWatchOrigin && active.originalUrl.startsWith('http://') && (
+              <a
+                href={`${httpWatchOrigin}/watch?url=${encodeURIComponent(active.originalUrl)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  background: 'rgba(255,255,255,0.1)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 8, padding: '10px 24px',
+                  fontSize: '0.9rem', cursor: 'pointer',
+                  fontWeight: 600, textDecoration: 'none',
+                }}
+              >
+                Assistir sem travar ↗
+              </a>
+            )}
           </div>
         </div>
       )}
