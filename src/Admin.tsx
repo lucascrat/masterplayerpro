@@ -154,6 +154,9 @@ export default function Admin() {
     guard(() => api.admin.deleteIptvCredential(id), 'Erro ao excluir credencial', 'Credencial removida.');
   };
 
+  const testIptvCredential = (data: { username: string; password: string; playlistId: string }) =>
+    api.admin.testIptvCredential(data);
+
   if (!isLoggedIn) {
     return <AdminLogin onLogin={handleLogin} error={loginError} />;
   }
@@ -188,6 +191,7 @@ export default function Admin() {
           onDeleteUser={deleteAppUser}
           onCreateCredential={createIptvCredential}
           onDeleteCredential={deleteIptvCredential}
+          onTestCredential={testIptvCredential}
         />
       )}
 

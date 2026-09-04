@@ -33,17 +33,35 @@ interface AdminUsersProps {
   onDeleteUser: (id: string) => void;
   onCreateCredential: (data: { username: string; password: string; playlistId?: string; serverUrl?: string; maxLeases?: number }) => void;
   onDeleteCredential: (id: string) => void;
+  onTestCredential: (data: { username: string; password: string; playlistId: string }) => Promise<{ ok: boolean; status: number; detail: string }>;
 }
+
+type TestState = { state: 'idle' } | { state: 'testing' } | { state: 'done'; ok: boolean; detail: string };
 
 export default function AdminUsers({
   appUsers, iptvCredentials, playlists,
   onCreateUser, onUpdateUser, onDeleteUser,
-  onCreateCredential, onDeleteCredential,
+  onCreateCredential, onDeleteCredential, onTestCredential,
 }: AdminUsersProps) {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showCredForm, setShowCredForm] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', password: '', name: '' });
   const [newCred, setNewCred] = useState({ username: '', password: '', playlistId: '', serverUrl: '', maxLeases: '2' });
+  const [credTest, setCredTest] = useState<TestState>({ state: 'idle' });
+
+  const handleTestCred = async () => {
+    if (!newCred.username || !newCred.password || !newCred.playlistId) {
+      setCredTest({ state: 'done', ok: false, detail: 'Preencha usuário, senha e selecione uma playlist existente (DNS novo não dá pra testar antes de criar).' });
+      return;
+    }
+    setCredTest({ state: 'testing' });
+    try {
+      const r = await onTestCredential({ username: newCred.username, password: newCred.password, playlistId: newCred.playlistId });
+      setCredTest({ state: 'done', ok: r.ok, detail: r.detail });
+    } catch (err: any) {
+      setCredTest({ state: 'done', ok: false, detail: err?.message || 'Falha ao testar.' });
+    }
+  };
 
   const handleCreateUser = () => {
     if (!newUser.username || !newUser.password) {
@@ -65,7 +83,13 @@ export default function AdminUsers({
       maxLeases: parseInt(newCred.maxLeases) || 2,
     });
     setNewCred({ username: '', password: '', playlistId: '', serverUrl: '', maxLeases: '2' });
+    setCredTest({ state: 'idle' });
     setShowCredForm(false);
+  };
+
+  const updateNewCred = (patch: Partial<typeof newCred>) => {
+    setNewCred(prev => ({ ...prev, ...patch }));
+    setCredTest({ state: 'idle' }); // stale once the fields change again
   };
 
   const totalLeases = iptvCredentials.reduce((sum, c) => sum + c.leases.length, 0);
@@ -175,30 +199,53 @@ export default function AdminUsers({
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, minWidth: 150 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Usuario IPTV</label>
-              <input className="admin-input" value={newCred.username} onChange={e => setNewCred({ ...newCred, username: e.target.value })} placeholder="335961855" />
+              <input className="admin-input" value={newCred.username} onChange={e => updateNewCred({ username: e.target.value })} placeholder="335961855" />
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Senha IPTV</label>
-              <input className="admin-input" value={newCred.password} onChange={e => setNewCred({ ...newCred, password: e.target.value })} placeholder="188308988" />
+              <input className="admin-input" value={newCred.password} onChange={e => updateNewCred({ password: e.target.value })} placeholder="188308988" />
             </div>
              <div style={{ flex: 1, minWidth: 180 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Playlist Existente</label>
-              <select className="admin-select" value={newCred.playlistId} onChange={e => setNewCred({ ...newCred, playlistId: e.target.value, serverUrl: '' })}>
+              <select className="admin-select" value={newCred.playlistId} onChange={e => updateNewCred({ playlistId: e.target.value, serverUrl: '' })}>
                 <option value="">Selecione...</option>
                 {playlists.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div style={{ flex: 1, minWidth: 180 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>ou Novo DNS / URL</label>
-              <input className="admin-input" value={newCred.serverUrl} onChange={e => setNewCred({ ...newCred, serverUrl: e.target.value, playlistId: '' })} placeholder="http://girassoldh.top" />
+              <input className="admin-input" value={newCred.serverUrl} onChange={e => updateNewCred({ serverUrl: e.target.value, playlistId: '' })} placeholder="http://girassoldh.top" />
             </div>
             <div style={{ width: 80 }}>
               <label style={{ fontSize: '0.72rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Max Usos</label>
-              <input className="admin-input" type="number" min="1" max="10" value={newCred.maxLeases} onChange={e => setNewCred({ ...newCred, maxLeases: e.target.value })} />
+              <input className="admin-input" type="number" min="1" max="10" value={newCred.maxLeases} onChange={e => updateNewCred({ maxLeases: e.target.value })} />
             </div>
+            <button
+              className="admin-btn-secondary"
+              onClick={handleTestCred}
+              disabled={credTest.state === 'testing'}
+              style={{ height: 40 }}
+              title="Confere usuário/senha direto no provedor antes de salvar"
+            >
+              {credTest.state === 'testing' ? 'Testando…' : '🔎 Testar'}
+            </button>
             <button className="admin-btn-primary" onClick={handleCreateCred} style={{ height: 40 }}>Salvar</button>
             <button className="admin-btn-secondary" onClick={() => setShowCredForm(false)} style={{ height: 40 }}>Cancelar</button>
           </div>
+
+          {credTest.state === 'done' && (
+            <div style={{
+              marginTop: '0.85rem',
+              padding: '0.65rem 0.9rem',
+              borderRadius: 8,
+              fontSize: '0.85rem',
+              background: credTest.ok ? 'rgba(76,175,80,0.12)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${credTest.ok ? 'rgba(76,175,80,0.35)' : 'rgba(239,68,68,0.4)'}`,
+              color: credTest.ok ? '#4caf50' : '#f87171',
+            }}>
+              {credTest.ok ? '✅ ' : '❌ '}{credTest.detail}
+            </div>
+          )}
         </div>
       )}
 
